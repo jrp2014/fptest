@@ -6,9 +6,10 @@ import Text.Parsec.Number
 import Numeric
 import Control.Monad (liftM, ap)
 import Test.QuickCheck hiding (output)
+import Data.Word (Word64, Word32)
+import Unsafe.Coerce (unsafeCoerce)
 
 -- TODO:: Text.Parsec.Number accepts only lower case "p"
---
 
 {- From "Floating-Point Test-Suite for IEEE", IBM Labs in Haifa, FPgen team.
  - Contact: Merav Aharoni
@@ -39,10 +40,10 @@ data EnableBit = EnableBit {
   } deriving (Show)
 
 data Format = BasicFormat BasicFormat |
-  ComparisonFormat BasicFormat BasicFormat deriving (Show)
+  ComparisonFormat BasicFormat BasicFormat deriving (Show, Eq)
 
 data BasicFormat = Binary32 | Binary64 | Binary128 |
-  Decimal32 | Decimal64 | Decimal128 deriving (Show)
+  Decimal32 | Decimal64 | Decimal128 deriving (Show, Eq)
 
 data Operation = Add | Subtract | Multiply | Divide | FusedMultiplyAdd |
   SquareRoot | Remainder | RoundFloatToInteger |
@@ -69,13 +70,13 @@ data Exception = Inexact | Underflow | ExtraordinaryUnderflow |
 {- This type is for the parsed test cases
 The operands are kept as strings so that
 we can test different functions for parsing them. -}
-data TestCase operandType = TestCase {
+data TestCase operationType = TestCase {
   format :: Format,
   operation :: Operation,
   roundingMode :: RoundingMode,
   trappedExceptions :: [TrappedException],
-  inputs :: [operandType],
-  output :: operandType,
+  inputs :: [operationType],
+  output :: operationType,
   outputExceptions :: [Exception]
   } deriving (Show)
 
@@ -358,41 +359,99 @@ outputExceptions = outputExceptions t
 -- Placeholder
 type Quad = Double
 
+
+class (RealFloat a, Show a) => HasNaN a where
+    signallingNaN :: a
+    quietNaN :: a
+
+instance HasNaN Double where
+    signallingNaN = unsafeCoerce (0x7ff4000000000000::Word64)
+    quietNaN = unsafeCoerce (0x7ff8000000000000::Word64)
+
+instance HasNaN Float where
+    signallingNaN = unsafeCoerce (0x7fa00000::Word32)
+    quietNaN = unsafeCoerce (0x7fc00000::Word32)
+
+boolNum :: RealFloat f => Bool -> f
+boolNum True = 1.0
+boolNum False = 0.0
+
+
 {- TODO:: Could use CFloat, CDouble
 TODO:: Consider endianness -}
 
-
+-- eval :: ParsedTestCase -> Float
+eval TestCase {format = f,
+  operation = op,
+  roundingMode = rm,
+  trappedExceptions = te,
+  inputs = is,
+  output = o,
+  outputExceptions = oe} = o ++ " =? " ++
+    case f of
+      BasicFormat Binary32 ->
+        case op of
+          Add -> floatToHex  (i1 + i2)
+          Subtract ->  floatToHex  (i1 - i2)
+          Multiply ->  floatToHex  (i1 * i2)
+          Divide ->   floatToHex  (i1 / i2)
+          IsFinite -> show $ not (isInfinite i1)
+          _ -> "Unimplemented op: "  ++ show op
+        where
+	  i1 :: Float
+          i1 = hexToFloat $ head is
+	  i2 :: Float
+          i2 = hexToFloat $ head $ tail is
+      BasicFormat Binary64 ->
+        case op of
+          Add -> floatToHex (i1 + i2)
+          Subtract ->  floatToHex  (i1 - i2)
+          Multiply ->  floatToHex  (i1 * i2)
+          Divide ->   floatToHex  (i1 / i2)
+          IsFinite -> show $ not (isInfinite i1)
+          _ -> "Unimplemented op: "  ++ show op
+        where
+	  i1 :: Double
+          i1 = hexToFloat $ head is
+	  i2 :: Double
+          i2 = hexToFloat $ head $ tail is
 
 -- -- Helper functions to work with Hex floating point format
 
-hexToFloat :: RealFloat a => String -> a
-hexToFloat s 
-  | s == "Zero" = 0.0
+hexToFloat :: (RealFloat a, HasNaN a) => String -> a
+hexToFloat s
+  | s == "+Zero" = 0.0
+  | s == "-Zero" = -0.0
+  | s == "+Inf" = 1/0
+  | s == "-Inf" = negate 1.0/0.0
+  | s == "Q" = 0/0
+  | s == "S" = signallingNaN
   | otherwise =
       case parse hexToFloat' "hexToFloat" s of
-        Left err -> error ("Could not parse '" ++ s ++ "' :" ++ show err) 
+        Left err -> error ("Invalid hex format floating point number '" ++ s ++ "' :" ++ show err)
         Right f -> f
       where
         hexToFloat' :: RealFloat a => GenParser Char st a
         hexToFloat' = do
-          sn <- sign
+          sn <- sign 
           h <- hexFloat False
+	  eof
           return $ sn $ case h of
               Left i -> fromInteger i
               Right f -> f
-        
-    
-  
--- TODO:: handle denormalized case
--- TODO:: refactor this in terms of encodeFloat, signCharificand, etc
+
+
+{- TODO:: handle denormalized case
+TODO:: refactor this in terms of encodeFloat, signCharificand, etc -}
 
 -- The hex format of float
-floatToHex :: (Show a, RealFloat a) => a -> String
+floatToHex :: (RealFloat a, Show a) => a -> String
 floatToHex x
   | isNaN x = "NaN"
-  | isInfinite x  && x > 0 = "+Inf"
+  | isInfinite x && x > 0 = "+Inf"
   | isInfinite x = "-Inf"
   | isNegativeZero x = "-Zero"
+  | x == 0.0 = "+Zero"
   | isDenormalized x = "Denormalized"
   | not (isIEEE x) = "Not an IEEE floating point number: " ++ show x
   | x < 0 = '-' : binaryDigitsToString (floatToDigits 2 (-x))
@@ -402,7 +461,7 @@ floatToHex x
       binaryDigitsToString (1 : normalizedBinaryFraction, n ) = "1." ++
         normalizedBinaryFractionToString (normalizedBinaryFraction, n - 1)
       binaryDigitsToString ([0], n ) = "Zero"
-      binaryDigitsToString ( 0 : denormalizedBinaryFraction, n) = "Denormalized" 
+      binaryDigitsToString ( 0 : denormalizedBinaryFraction, n) = "Denormalized"
       binaryDigitsToString _ = error "binaryDigitsToString"
 
       normalizedBinaryFractionToString :: ([Int], Int) -> String
@@ -418,7 +477,7 @@ floatToHex x
       binaryToHex [] = ""
 
 
-prop_FloatHex :: (RealFloat a, Show a) => a -> Bool
+prop_FloatHex :: (RealFloat a, HasNaN a, Show a) => a -> Bool
 prop_FloatHex f = hexToFloat (floatToHex f) == f
 
 -- -- Helper functions for testing the test case file parser -------------------
@@ -443,9 +502,27 @@ parseTestCases f = do
 parseTests :: IO ()
 parseTests = mapM_ parseTestCases testFiles
 
+evalTestCases :: String -> IO ()
+evalTestCases f = do
+  result <- parseFromFile testCaseFile f
+  case result of
+    Left err -> do
+                  print err
+		  error "failed"
+    Right xs -> print (map eval xs)
+
+evalTests :: IO()
+evalTests = mapM_ evalTestCases testFiles
+
+
 
 testFiles :: [String]
 testFiles = map ("test_suite/" ++)
+  [  "Basic-Types-Inputs.fptest"]
+
+
+
+saveTestFiles =
   ["Add-Cancellation-And-Subnorm-Result.fptest",
   "Add-Cancellation.fptest",
   "Add-Shift-And-Special-Significands.fptest",
