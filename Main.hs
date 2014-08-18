@@ -31,6 +31,26 @@ operation semantics.
 
 TODO:: (Not yet used)
  -}
+
+class Show a => Display a where
+  display :: a -> String
+  display = show
+
+  displayList :: [a] -> String
+  displayList [] = ""
+  displayList [x] = display x
+  displayList (x:xs) = display x ++ " " ++ displayList xs
+
+  printd :: a -> IO()
+  printd = putStrLn . display
+
+instance Display a => Display [a] where
+  display = displayList
+
+instance Display Char where
+  displayList = id
+
+
 data OperationModel = OperationGeneral | OperationSpecific deriving (Show)
 
 data EnableBit = EnableBit {
@@ -42,23 +62,23 @@ data EnableBit = EnableBit {
   } deriving (Show)
 
 data Format = BasicFormat BasicFormat |
-  ComparisonFormat BasicFormat BasicFormat deriving (Eq)
+  ComparisonFormat BasicFormat BasicFormat deriving (Show, Eq)
 
-instance Show (Format) where
-  show (BasicFormat bf) = show bf
-  show (ComparisonFormat bf1 bf2) = show bf1 ++ show bf2
+instance Display (Format) where
+  display (BasicFormat bf) = display bf
+  display (ComparisonFormat bf1 bf2) = display bf1 ++ display bf2
 
 
 data BasicFormat = Binary32 | Binary64 | Binary128 |
-  Decimal32 | Decimal64 | Decimal128 deriving (Eq)
+  Decimal32 | Decimal64 | Decimal128 deriving (Show, Eq)
 
-instance Show (BasicFormat) where
-  show Binary32 = "b32"
-  show Binary64 = "b64"
-  show Binary128 = "b128"
-  show Decimal32 = "d32"
-  show Decimal64 = "d64"
-  show Decimal128 = "d128"
+instance Display (BasicFormat) where
+  display Binary32 = "b32"
+  display Binary64 = "b64"
+  display Binary128 = "b128"
+  display Decimal32 = "d32"
+  display Decimal64 = "d64"
+  display Decimal128 = "d128"
 
 
 data Operation = Add | Subtract | Multiply | Divide | FusedMultiplyAdd |
@@ -70,88 +90,83 @@ data Operation = Add | Subtract | Multiply | Divide | FusedMultiplyAdd |
   IsSigned | IsNormal | IsFinite | IsZero | IsSubNormal |
   IsInf | IsNaN | IsSignalling |
   MinNum | MaxNum | MinNumMag | MaxNumMag | SameQuantum | Quantize |
-  NextUp | NextDown | Equivalent
+  NextUp | NextDown | Equivalent deriving (Show)
 
-instance Show (Operation) where
-  show Add = "+"
-  show Subtract = "-"
-  show Multiply = "*"
-  show Divide = "/"
-  show FusedMultiplyAdd = "*+"
-  show SquareRoot = "V"
-  show Remainder = "%"
-  show RoundFloatToInteger = "rfi"
-  show ConvertFloatToFloat = "cff"
-  show ConvertFloatToInteger = "cfi"
-  show ConvertIntegerToFloat = "cif"
-  show ConvertDecimalToString = "cfd"
-  show ConvertStringToDecimal = "cdf"
-  show QuietComparison = "qC"
-  show SignallingComparison = "sC"
-  show Copy = "cp"
-  show Negate = "~"
-  show Abs = "A"
-  show CopySign = "@"
-  show Scalb = "S"
-  show Logb = "L"
-  show NextAfter = "Na"
-  show Class = "?"
-  show IsSigned = "?-"
-  show IsNormal = "?n"
-  show IsFinite = "?f"
-  show IsZero = "?0"
-  show IsSubNormal = "?s"
-  show IsInf = "?i"
-  show IsNaN = "?N"
-  show IsSignalling = "?sN"
-  show MinNum = "<C"
-  show MaxNum = ">C"
-  show MinNumMag = "<A"
-  show MaxNumMag = ">A"
-  show SameQuantum = "=quant"
-  show Quantize = "quant"
-  show NextUp = "Nu"
-  show NextDown = "Nd"
-  show Equivalent = "eq"
+instance Display (Operation) where
+  display Add = "+"
+  display Subtract = "-"
+  display Multiply = "*"
+  display Divide = "/"
+  display FusedMultiplyAdd = "*+"
+  display SquareRoot = "V"
+  display Remainder = "%"
+  display RoundFloatToInteger = "rfi"
+  display ConvertFloatToFloat = "cff"
+  display ConvertFloatToInteger = "cfi"
+  display ConvertIntegerToFloat = "cif"
+  display ConvertDecimalToString = "cfd"
+  display ConvertStringToDecimal = "cdf"
+  display QuietComparison = "qC"
+  display SignallingComparison = "sC"
+  display Copy = "cp"
+  display Negate = "~"
+  display Abs = "A"
+  display CopySign = "@"
+  display Scalb = "S"
+  display Logb = "L"
+  display NextAfter = "Na"
+  display Class = "?"
+  display IsSigned = "?-"
+  display IsNormal = "?n"
+  display IsFinite = "?f"
+  display IsZero = "?0"
+  display IsSubNormal = "?s"
+  display IsInf = "?i"
+  display IsNaN = "?N"
+  display IsSignalling = "?sN"
+  display MinNum = "<C"
+  display MaxNum = ">C"
+  display MinNumMag = "<A"
+  display MaxNumMag = ">A"
+  display SameQuantum = "=quant"
+  display Quantize = "quant"
+  display NextUp = "Nu"
+  display NextDown = "Nd"
+  display Equivalent = "eq"
 
 data RoundingMode = PositiveInfinity | NegativeInfinity | Zero | NearestEven |
-  NearestAwayFromZero
+  NearestAwayFromZero deriving (Show)
 
-instance Show (RoundingMode) where
-  show PositiveInfinity = ">"
-  show NegativeInfinity = "<"
-  show Zero = "0"
-  show NearestEven = "=0"
-  show NearestAwayFromZero = "^0"
+instance Display (RoundingMode) where
+  display PositiveInfinity = ">"
+  display NegativeInfinity = "<"
+  display Zero = "0"
+  display NearestEven = "=0"
+  display NearestAwayFromZero = "^0"
 
 
 data TrappedException = TrappedInexact | TrappedUnderflow | TrappedOverflow |
-  TrappedDivisionByZero | TrappedInvalid
+  TrappedDivisionByZero | TrappedInvalid deriving (Show)
 
-instance Show (TrappedException) where
-  show TrappedInexact = "x"
-  show TrappedUnderflow = "u"
-  show TrappedOverflow = "o"
-  show TrappedDivisionByZero = "z"
-  show TrappedInvalid = "i"
-  showList [] = showString ""
-  showList (x : xs) = shows x . shows xs
-
+instance Display (TrappedException) where
+  display TrappedInexact = "x"
+  display TrappedUnderflow = "u"
+  display TrappedOverflow = "o"
+  display TrappedDivisionByZero = "z"
+  display TrappedInvalid = "i"
 
 data Exception = Inexact |
   ExtraordinaryUnderflow | InexactTinyUnderflow | TinyInexactUnderflow |
-  Overflow | DivisionByZero | Invalid
+  Overflow | DivisionByZero | Invalid deriving (Show)
 
-instance Show (Exception) where
-  show Inexact = "x"
-  show ExtraordinaryUnderflow = "u"
-  show InexactTinyUnderflow = "v"
-  show TinyInexactUnderflow = "w"
-  show Overflow = "o"
-  show DivisionByZero = "z"
-  show Invalid = "i"
-  showList [] = showString ""
-  showList (x : xs) = shows x . shows xs
+instance Display (Exception) where
+  display Inexact = "x"
+  display ExtraordinaryUnderflow = "u"
+  display InexactTinyUnderflow = "v"
+  display TinyInexactUnderflow = "w"
+  display Overflow = "o"
+  display DivisionByZero = "z"
+  display Invalid = "i"
 
 {- This type is for the parsed test cases
 The operands are kept as strings so that
@@ -166,20 +181,27 @@ data TestCase operationType = TestCase {
   inputs :: [operationType],
   output :: operationType,
   outputExceptions :: [Exception]
-  }
+  } deriving (Show)
 
-instance Show operation => Show (TestCase operation) where
-  show TestCase {
+type ParsedTestCase = TestCase String
+type InterpretedTestCase = TestCase Float
+
+instance (Display a, Show a) => Display (TestCase a) where
+  display TestCase {
   format = f,
   operation = op,
   roundingMode = rm,
   trappedExceptions = te,
   inputs = ins,
   output = out,
-  outputExceptions = oe} = show f ++ show op ++ " " ++ show rm ++ show te ++ " " ++ show ins ++ " -> " ++ show out ++ " " ++ show oe
+  outputExceptions = oe} =
+    display f ++ display op ++ " " ++ display rm ++ " " ++ display te ++ " " ++ display ins ++ " -> "
+      ++ display out ++ " " ++ display oe
 
-type ParsedTestCase = TestCase String
-type InterpretedTestCase = TestCase Float
+  displayList [] = ""
+  displayList [t] = display t
+  displayList (t:ts) = display t ++ "\n" ++ displayList ts
+
 
 -- -------------------- Test Case File Parser ----------------------------------
 testCaseFile :: GenParser Char st [ParsedTestCase]
@@ -338,7 +360,7 @@ inputSpec :: GenParser Char st [String]
 inputSpec = operandSpec `sepEndBy1` char ' '
 
 outputSpec :: GenParser Char st String
-outputSpec = operandSpec <|> (char '#' >> return "")
+outputSpec = operandSpec <|> (char '#' >> return "#")
 
 binaryFloatingPoint :: GenParser Char st String
 binaryFloatingPoint =
@@ -406,7 +428,7 @@ integer = try
 boolean :: GenParser Char st String
 boolean =
   (try (string "0x0") >> return "+Zero") <|>
-  (string "0x1" >> return "+1.0P0")
+  (string "0x1" >> return "1.P+0")
 
 returnClass :: GenParser Char st String
 returnClass =
@@ -503,10 +525,10 @@ eval TestCase {format = f,
           Logb -> floatToHex $ log i1
           IsZero -> floatToHex $ boolNum (i1 == 0.0)
           IsSubNormal -> floatToHex $ boolNum $ isDenormalized i1
-          isSigned -> floatToHex $ boolNum $ i1 < 0.0
+          IsSigned -> floatToHex $ boolNum $ i1 < 0.0
           IsNaN -> floatToHex $ boolNum $ isNaN i1
-          isFinite -> floatToHex $ boolNum $ not $ isInfinite i1
-          isInf -> floatToHex $ boolNum $ isInfinite i1
+          IsFinite -> floatToHex $ boolNum $ not $ isInfinite i1
+          IsInf -> floatToHex $ boolNum $ isInfinite i1
           _ -> "Unimplemented op: " ++ show op
         where
           i1 :: Float
@@ -529,10 +551,10 @@ eval TestCase {format = f,
           Logb -> floatToHex $ log i1
           IsZero -> floatToHex $ boolNum (i1 == 0.0)
           IsSubNormal -> floatToHex $ boolNum $ isDenormalized i1
-          isSigned -> floatToHex $ boolNum $ i1 < 0.0
+          IsSigned -> floatToHex $ boolNum $ i1 < 0.0
           IsNaN -> floatToHex $ boolNum $ isNaN i1
-          isFinite -> floatToHex $ boolNum $ not $ isInfinite i1
-          isInf -> floatToHex $ boolNum $ isInfinite i1
+          IsFinite -> floatToHex $ boolNum $ not $ isInfinite i1
+          IsInf -> floatToHex $ boolNum $ isInfinite i1
           _ -> "Unimplemented op: " ++ show op
         where
           i1 :: Double
@@ -546,8 +568,9 @@ eval TestCase {format = f,
 checkResult :: ParsedTestCase -> String
 checkResult t@TestCase { output = o, outputExceptions = oe}
   | take (length "Unimplemented") et == "Unimplemented" = "."
-  | strcmp et o = "Success!"
-  | otherwise = eval t ++ "/=" ++ show o
+  | strcmp et o = display t ++ ": Success!"
+  | o == "#" = display t ++ ": No output expected: " ++ et
+  | otherwise = display t ++ ": " ++ et ++ " /= " ++ display o
   where et = eval t
 
 -- Case insensitive string comparison
@@ -648,7 +671,7 @@ parseTests = mapM_ parseTestCases testFiles
                       error "failed"
         Right xs -> do
                       print f
-                      print xs
+                      printd xs
 
 evalTests :: IO ()
 evalTests = mapM_ evalTestCases testFiles
@@ -660,8 +683,12 @@ evalTests = mapM_ evalTestCases testFiles
         Left err -> do
                       print err
                       error "Test case file failed to parse"
-        Right xs -> print (map checkResult xs)
+        --Right xs -> mapM_ print (map checkResult xs)
+        Right xs -> putStrLn $ unlines (map checkResult xs)
 
+
+main :: IO()
+main = evalTests
 
 check :: String
 check =
@@ -674,7 +701,7 @@ testFiles :: [String]
 testFiles = map ("test_suite/" ++)
   [ "Basic-Types-Inputs.fptest"]
 
-
+saveTestFiles :: [String]
 saveTestFiles =
   ["Add-Cancellation-And-Subnorm-Result.fptest",
   "Add-Cancellation.fptest",
