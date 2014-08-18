@@ -44,15 +44,15 @@ data EnableBit = EnableBit {
 data Format = BasicFormat BasicFormat |
   ComparisonFormat BasicFormat BasicFormat deriving (Eq)
 
-instance Show(Format) where
+instance Show (Format) where
   show (BasicFormat bf) = show bf
-  show (ComparisonFormat bf1 bf2) = show bf1 ++ show bf2 
+  show (ComparisonFormat bf1 bf2) = show bf1 ++ show bf2
 
 
 data BasicFormat = Binary32 | Binary64 | Binary128 |
   Decimal32 | Decimal64 | Decimal128 deriving (Eq)
 
-instance Show(BasicFormat) where
+instance Show (BasicFormat) where
   show Binary32 = "b32"
   show Binary64 = "b64"
   show Binary128 = "b128"
@@ -72,7 +72,7 @@ data Operation = Add | Subtract | Multiply | Divide | FusedMultiplyAdd |
   MinNum | MaxNum | MinNumMag | MaxNumMag | SameQuantum | Quantize |
   NextUp | NextDown | Equivalent
 
-instance Show(Operation) where
+instance Show (Operation) where
   show Add = "+"
   show Subtract = "-"
   show Multiply = "*"
@@ -117,7 +117,7 @@ instance Show(Operation) where
 data RoundingMode = PositiveInfinity | NegativeInfinity | Zero | NearestEven |
   NearestAwayFromZero
 
-instance Show(RoundingMode) where
+instance Show (RoundingMode) where
   show PositiveInfinity = ">"
   show NegativeInfinity = "<"
   show Zero = "0"
@@ -126,16 +126,16 @@ instance Show(RoundingMode) where
 
 
 data TrappedException = TrappedInexact | TrappedUnderflow | TrappedOverflow |
-  TrappedDivisionByZero | TrappedInvalid 
+  TrappedDivisionByZero | TrappedInvalid
 
-instance Show(TrappedException) where
+instance Show (TrappedException) where
   show TrappedInexact = "x"
   show TrappedUnderflow = "u"
   show TrappedOverflow = "o"
-  show TrappedDivisionByZero = "z" 
+  show TrappedDivisionByZero = "z"
   show TrappedInvalid = "i"
   showList [] = showString ""
-  showList (x:xs) = shows x . shows xs
+  showList (x : xs) = shows x . shows xs
 
 
 data Exception = Inexact |
@@ -143,21 +143,21 @@ data Exception = Inexact |
   Overflow | DivisionByZero | Invalid
 
 instance Show (Exception) where
-  show Inexact = "x" 
-  show ExtraordinaryUnderflow = "u" 
+  show Inexact = "x"
+  show ExtraordinaryUnderflow = "u"
   show InexactTinyUnderflow = "v"
   show TinyInexactUnderflow = "w"
   show Overflow = "o"
   show DivisionByZero = "z"
   show Invalid = "i"
   showList [] = showString ""
-  showList (x:xs) = shows x . shows xs
+  showList (x : xs) = shows x . shows xs
 
 {- This type is for the parsed test cases
 The operands are kept as strings so that
-we can test different functions for parsing them. -}
--- TODO:: take the format out of the record and make it a parameter of 
--- TestCase, so that we can write different eval instances.
+we can test different functions for parsing them.
+TODO:: take the format out of the record and make it a parameter of
+TestCase, so that we can write different eval instances. -}
 data TestCase operationType = TestCase {
   format :: Format,
   operation :: Operation,
@@ -166,9 +166,9 @@ data TestCase operationType = TestCase {
   inputs :: [operationType],
   output :: operationType,
   outputExceptions :: [Exception]
-  } 
+  }
 
-instance Show operation => Show(TestCase operation) where
+instance Show operation => Show (TestCase operation) where
   show TestCase {
   format = f,
   operation = op,
@@ -176,7 +176,7 @@ instance Show operation => Show(TestCase operation) where
   trappedExceptions = te,
   inputs = ins,
   output = out,
-  outputExceptions = oe} = show f ++ show op ++ " " ++ show rm ++ show te ++ " " ++ show ins ++ " -> " ++ show out ++ " " ++ show oe 
+  outputExceptions = oe} = show f ++ show op ++ " " ++ show rm ++ show te ++ " " ++ show ins ++ " -> " ++ show out ++ " " ++ show oe
 
 type ParsedTestCase = TestCase String
 type InterpretedTestCase = TestCase Float
@@ -464,12 +464,12 @@ class (RealFloat a, Show a) => HasNaN a where
     quietNaN :: a
 
 instance HasNaN Double where
-    signallingNaN = unsafeCoerce (0x7ff4000000000000::Word64)
-    quietNaN = unsafeCoerce (0x7ff8000000000000::Word64)
+    signallingNaN = unsafeCoerce (0x7ff4000000000000 :: Word64)
+    quietNaN = unsafeCoerce (0x7ff8000000000000 :: Word64)
 
 instance HasNaN Float where
-    signallingNaN = unsafeCoerce (0x7fa00000::Word32)
-    quietNaN = unsafeCoerce (0x7fc00000::Word32)
+    signallingNaN = unsafeCoerce (0x7fa00000 :: Word32)
+    quietNaN = unsafeCoerce (0x7fc00000 :: Word32)
 
 boolNum :: RealFloat f => Bool -> f
 boolNum True = 1.0
@@ -486,77 +486,75 @@ eval TestCase {format = f,
   trappedExceptions = te,
   inputs = is,
   output = o,
-  outputExceptions = oe} = 
+  outputExceptions = oe} =
     case f of
       BasicFormat Binary32 ->
         case op of
-          Add -> floatToHex  (i1 + i2)
-          Subtract ->  floatToHex  (i1 - i2)
-          Multiply ->  floatToHex  (i1 * i2)
-          Divide ->   floatToHex  (i1 / i2)
-	  SquareRoot -> floatToHex $ sqrt i1
-	  Remainder -> floatToHex r where (_, r) = i1 `divMod'` i2 -- i1 bound to Integer
-	  RoundFloatToInteger -> floatToHex $ fromIntegral $ round i1 -- defaults to Double
+          Add -> floatToHex (i1 + i2)
+          Subtract -> floatToHex (i1 - i2)
+          Multiply -> floatToHex (i1 * i2)
+          Divide -> floatToHex (i1 / i2)
+          SquareRoot -> floatToHex $ sqrt i1
+          Remainder -> floatToHex r where (_, r) = i1 `divMod'` i2 -- i1 bound to Integer
+          RoundFloatToInteger -> floatToHex $ fromIntegral $ round i1 -- defaults to Double
           ConvertFloatToFloat -> floatToHex i1 -- TODO::
           Negate -> floatToHex $ negate i1
-	  Abs -> floatToHex $ abs i1
-	  Logb -> floatToHex $ log i1
-	  IsZero -> floatToHex $ boolNum (i1 == 0.0)
-	  IsSubNormal -> floatToHex $ boolNum $ isDenormalized i1
+          Abs -> floatToHex $ abs i1
+          Logb -> floatToHex $ log i1
+          IsZero -> floatToHex $ boolNum (i1 == 0.0)
+          IsSubNormal -> floatToHex $ boolNum $ isDenormalized i1
           isSigned -> floatToHex $ boolNum $ i1 < 0.0
           IsNaN -> floatToHex $ boolNum $ isNaN i1
-	  isFinite -> floatToHex $ boolNum $ not $ isInfinite i1 
-	  isInf -> floatToHex $ boolNum $ isInfinite i1 
-          _ -> "Unimplemented op: "  ++ show op
+          isFinite -> floatToHex $ boolNum $ not $ isInfinite i1
+          isInf -> floatToHex $ boolNum $ isInfinite i1
+          _ -> "Unimplemented op: " ++ show op
         where
-	  i1 :: Float
+          i1 :: Float
           i1 = hexToFloat $ head is
-	  i2 :: Float
+          i2 :: Float
           i2 = hexToFloat $ head $ tail is
 
       BasicFormat Binary64 ->
         case op of
-          Add -> floatToHex  (i1 + i2)
-          Subtract ->  floatToHex  (i1 - i2)
-          Multiply ->  floatToHex  (i1 * i2)
-          Divide ->   floatToHex  (i1 / i2)
-	  SquareRoot -> floatToHex $ sqrt i1
-	  Remainder -> floatToHex r where (_, r) = i1 `divMod'` i2 -- i1 bound to Integer
-	  RoundFloatToInteger -> floatToHex $ fromIntegral $ round i1 -- defaults to Double
+          Add -> floatToHex (i1 + i2)
+          Subtract -> floatToHex (i1 - i2)
+          Multiply -> floatToHex (i1 * i2)
+          Divide -> floatToHex (i1 / i2)
+          SquareRoot -> floatToHex $ sqrt i1
+          Remainder -> floatToHex r where (_, r) = i1 `divMod'` i2 -- i1 bound to Integer
+          RoundFloatToInteger -> floatToHex $ fromIntegral $ round i1 -- defaults to Double
           ConvertFloatToFloat -> floatToHex i1 -- TODO::
           Negate -> floatToHex $ negate i1
-	  Abs -> floatToHex $ abs i1
-	  Logb -> floatToHex $ log i1
-	  IsZero -> floatToHex $ boolNum (i1 == 0.0)
-	  IsSubNormal -> floatToHex $ boolNum $ isDenormalized i1
+          Abs -> floatToHex $ abs i1
+          Logb -> floatToHex $ log i1
+          IsZero -> floatToHex $ boolNum (i1 == 0.0)
+          IsSubNormal -> floatToHex $ boolNum $ isDenormalized i1
           isSigned -> floatToHex $ boolNum $ i1 < 0.0
           IsNaN -> floatToHex $ boolNum $ isNaN i1
-	  isFinite -> floatToHex $ boolNum $ not $ isInfinite i1 
-	  isInf -> floatToHex $ boolNum $ isInfinite i1 
-          _ -> "Unimplemented op: "  ++ show op
+          isFinite -> floatToHex $ boolNum $ not $ isInfinite i1
+          isInf -> floatToHex $ boolNum $ isInfinite i1
+          _ -> "Unimplemented op: " ++ show op
         where
-	  i1 :: Double
+          i1 :: Double
           i1 = hexToFloat $ head is
-	  i2 :: Double
+          i2 :: Double
           i2 = hexToFloat $ head $ tail is
 
       _ -> "Unimplemented format: " ++ show f
 
 
 checkResult :: ParsedTestCase -> String
-checkResult t@TestCase { output = o, outputExceptions = oe} =
-  case take (length "Unimplemented") et ==  "Unimplemented" of
-    True -> "."
-    False -> case  strcmp et o of
-               True -> "Success!"
-               False -> eval t ++ "/=" ++ show o
+checkResult t@TestCase { output = o, outputExceptions = oe}
+  | take (length "Unimplemented") et == "Unimplemented" = "."
+  | strcmp et o = "Success!"
+  | otherwise = eval t ++ "/=" ++ show o
   where et = eval t
 
 -- Case insensitive string comparison
 strcmp :: String -> String -> Bool
 strcmp [] [] = True
 strcmp s1 s2 = case (s1, s2) of
-  (s11:ss1, s21:ss2)
+  (s11 : ss1, s21 : ss2)
     | toUpper s11 == toUpper s21 -> strcmp ss1 ss2
     | otherwise -> False
   _ -> False
@@ -568,9 +566,9 @@ hexToFloat :: (RealFloat a, HasNaN a) => String -> a
 hexToFloat s
   | s == "+Zero" = 0.0
   | s == "-Zero" = -0.0
-  | s == "+Inf" = 1/0
-  | s == "-Inf" = negate 1.0/0.0
-  | s == "Q" = 0/0
+  | s == "+Inf" = 1 / 0
+  | s == "-Inf" = negate 1.0 / 0.0
+  | s == "Q" = 0 / 0
   | s == "S" = signallingNaN
   | s == "true" = 1.0
   | s == "false" = 0.0
@@ -581,9 +579,9 @@ hexToFloat s
       where
         hexToFloat' :: RealFloat a => GenParser Char st a
         hexToFloat' = do
-          sn <- sign 
+          sn <- sign
           h <- hexFloat False
-	  eof
+          eof
           return $ sn $ case h of
               Left i -> fromInteger i
               Right f -> f
@@ -600,7 +598,7 @@ floatToHex x
   | isInfinite x = "-Inf"
   | isNegativeZero x = "-Zero"
   | x == 0.0 = "+Zero"
---  | isDenormalized x = "Denormalized"
+-- | isDenormalized x = "Denormalized"
   | not (isIEEE x) = "Not an IEEE floating point number: " ++ show x
   | x < 0 = '-' : binaryDigitsToString (floatToDigits 2 (-x))
   | otherwise = binaryDigitsToString (floatToDigits 2 x)
@@ -616,9 +614,9 @@ floatToHex x
       normalizedBinaryFractionToString (nbf, n) =
         binaryToHex nbf ++ "P" ++ exponentSign n ++ show n
           where
-	    exponentSign s
-	      | s < 0 = ""
-	      | otherwise = "+"
+            exponentSign s
+              | s < 0 = ""
+              | otherwise = "+"
 
       binaryToHex :: [Int] -> String
       binaryToHex (a : b : c : d : es) =
@@ -652,7 +650,7 @@ parseTests = mapM_ parseTestCases testFiles
                       print f
                       print xs
 
-evalTests :: IO()
+evalTests :: IO ()
 evalTests = mapM_ evalTestCases testFiles
   where
     evalTestCases :: String -> IO ()
@@ -661,22 +659,20 @@ evalTests = mapM_ evalTestCases testFiles
       case result of
         Left err -> do
                       print err
-    		      error "Test case file failed to parse"
+                      error "Test case file failed to parse"
         Right xs -> print (map checkResult xs)
-    
+
 
 check :: String
 check =
   case parse testCaseSpec "" "b32?i =0 +1.000000P0 -> 0x0\nb32+ =0 i +0.000001P-126 +1.000000P-126 -> +1.000001P-126" of
   Left err -> show err
-  Right t -> checkResult t 
-
+  Right t -> checkResult t
 
 
 testFiles :: [String]
 testFiles = map ("test_suite/" ++)
-  [  "Basic-Types-Inputs.fptest"]
-
+  [ "Basic-Types-Inputs.fptest"]
 
 
 saveTestFiles =
