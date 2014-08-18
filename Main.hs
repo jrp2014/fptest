@@ -6,6 +6,8 @@ import Text.Parsec.Number
 import Numeric
 import Control.Monad (liftM, ap)
 import Test.QuickCheck hiding (output)
+import Data.Fixed (divMod')
+import Data.Char (toUpper)
 import Data.Word (Word64, Word32)
 import Unsafe.Coerce (unsafeCoerce)
 
@@ -40,10 +42,24 @@ data EnableBit = EnableBit {
   } deriving (Show)
 
 data Format = BasicFormat BasicFormat |
-  ComparisonFormat BasicFormat BasicFormat deriving (Show, Eq)
+  ComparisonFormat BasicFormat BasicFormat deriving (Eq)
+
+instance Show(Format) where
+  show (BasicFormat bf) = show bf
+  show (ComparisonFormat bf1 bf2) = show bf1 ++ show bf2 
+
 
 data BasicFormat = Binary32 | Binary64 | Binary128 |
-  Decimal32 | Decimal64 | Decimal128 deriving (Show, Eq)
+  Decimal32 | Decimal64 | Decimal128 deriving (Eq)
+
+instance Show(BasicFormat) where
+  show Binary32 = "b32"
+  show Binary64 = "b64"
+  show Binary128 = "b128"
+  show Decimal32 = "d32"
+  show Decimal64 = "d64"
+  show Decimal128 = "d128"
+
 
 data Operation = Add | Subtract | Multiply | Divide | FusedMultiplyAdd |
   SquareRoot | Remainder | RoundFloatToInteger |
@@ -52,24 +68,96 @@ data Operation = Add | Subtract | Multiply | Divide | FusedMultiplyAdd |
   QuietComparison | SignallingComparison |
   Copy | Negate | Abs | CopySign | Scalb | Logb | NextAfter | Class |
   IsSigned | IsNormal | IsFinite | IsZero | IsSubNormal |
-  IsInf | IsNan | IsSignalling |
+  IsInf | IsNaN | IsSignalling |
   MinNum | MaxNum | MinNumMag | MaxNumMag | SameQuantum | Quantize |
   NextUp | NextDown | Equivalent
-  deriving (Show)
+
+instance Show(Operation) where
+  show Add = "+"
+  show Subtract = "-"
+  show Multiply = "*"
+  show Divide = "/"
+  show FusedMultiplyAdd = "*+"
+  show SquareRoot = "V"
+  show Remainder = "%"
+  show RoundFloatToInteger = "rfi"
+  show ConvertFloatToFloat = "cff"
+  show ConvertFloatToInteger = "cfi"
+  show ConvertIntegerToFloat = "cif"
+  show ConvertDecimalToString = "cfd"
+  show ConvertStringToDecimal = "cdf"
+  show QuietComparison = "qC"
+  show SignallingComparison = "sC"
+  show Copy = "cp"
+  show Negate = "~"
+  show Abs = "A"
+  show CopySign = "@"
+  show Scalb = "S"
+  show Logb = "L"
+  show NextAfter = "Na"
+  show Class = "?"
+  show IsSigned = "?-"
+  show IsNormal = "?n"
+  show IsFinite = "?f"
+  show IsZero = "?0"
+  show IsSubNormal = "?s"
+  show IsInf = "?i"
+  show IsNaN = "?N"
+  show IsSignalling = "?sN"
+  show MinNum = "<C"
+  show MaxNum = ">C"
+  show MinNumMag = "<A"
+  show MaxNumMag = ">A"
+  show SameQuantum = "=quant"
+  show Quantize = "quant"
+  show NextUp = "Nu"
+  show NextDown = "Nd"
+  show Equivalent = "eq"
 
 data RoundingMode = PositiveInfinity | NegativeInfinity | Zero | NearestEven |
-  NearestAwayFromZero deriving (Show)
+  NearestAwayFromZero
+
+instance Show(RoundingMode) where
+  show PositiveInfinity = ">"
+  show NegativeInfinity = "<"
+  show Zero = "0"
+  show NearestEven = "=0"
+  show NearestAwayFromZero = "^0"
+
 
 data TrappedException = TrappedInexact | TrappedUnderflow | TrappedOverflow |
-  TrappedDivisionByZero | TrappedInvalid deriving (Show)
+  TrappedDivisionByZero | TrappedInvalid 
 
-data Exception = Inexact | Underflow | ExtraordinaryUnderflow |
-  InexactUnderflow | Overflow | DivisionByZero | Invalid deriving (Show)
+instance Show(TrappedException) where
+  show TrappedInexact = "x"
+  show TrappedUnderflow = "u"
+  show TrappedOverflow = "o"
+  show TrappedDivisionByZero = "z" 
+  show TrappedInvalid = "i"
+  showList [] = showString ""
+  showList (x:xs) = shows x . shows xs
 
+
+data Exception = Inexact |
+  ExtraordinaryUnderflow | InexactTinyUnderflow | TinyInexactUnderflow |
+  Overflow | DivisionByZero | Invalid
+
+instance Show (Exception) where
+  show Inexact = "x" 
+  show ExtraordinaryUnderflow = "u" 
+  show InexactTinyUnderflow = "v"
+  show TinyInexactUnderflow = "w"
+  show Overflow = "o"
+  show DivisionByZero = "z"
+  show Invalid = "i"
+  showList [] = showString ""
+  showList (x:xs) = shows x . shows xs
 
 {- This type is for the parsed test cases
 The operands are kept as strings so that
 we can test different functions for parsing them. -}
+-- TODO:: take the format out of the record and make it a parameter of 
+-- TestCase, so that we can write different eval instances.
 data TestCase operationType = TestCase {
   format :: Format,
   operation :: Operation,
@@ -78,7 +166,17 @@ data TestCase operationType = TestCase {
   inputs :: [operationType],
   output :: operationType,
   outputExceptions :: [Exception]
-  } deriving (Show)
+  } 
+
+instance Show operation => Show(TestCase operation) where
+  show TestCase {
+  format = f,
+  operation = op,
+  roundingMode = rm,
+  trappedExceptions = te,
+  inputs = ins,
+  output = out,
+  outputExceptions = oe} = show f ++ show op ++ " " ++ show rm ++ show te ++ " " ++ show ins ++ " -> " ++ show out ++ " " ++ show oe 
 
 type ParsedTestCase = TestCase String
 type InterpretedTestCase = TestCase Float
@@ -198,7 +296,7 @@ operationSpec =
   (try (string "?sN") >> return IsSignalling) <|>
   (try (string "?s") >> return IsSubNormal) <|>
   (try (string "?i") >> return IsInf) <|>
-  (try (string "?N") >> return IsNan) <|>
+  (try (string "?N") >> return IsNaN) <|>
   (try (char '?') >> return Class) <|>
   (try (string "<C") >> return MinNum) <|>
   (try (string ">C") >> return MaxNum) <|>
@@ -304,10 +402,11 @@ integer = try
   i <- many1 digit
   return (s : i))
 
+-- Return a form that will match floatToHex
 boolean :: GenParser Char st String
 boolean =
-  (try (string "0x0") >> return "false") <|>
-  (string "0x1" >> return "true")
+  (try (string "0x0") >> return "+Zero") <|>
+  (string "0x1" >> return "+1.0P0")
 
 returnClass :: GenParser Char st String
 returnClass =
@@ -326,10 +425,10 @@ returnClass =
 outputExceptionsSpec :: GenParser Char st [Exception]
 outputExceptionsSpec = many (
   (char 'x' >> return Inexact) <|>
-  (char 'u' >> return Underflow) <|>
-  (char 'v' >> return Underflow) <|>
-  (char 'w' >> return ExtraordinaryUnderflow) <|>
-  (char 'o' >> return InexactUnderflow) <|>
+  (char 'u' >> return ExtraordinaryUnderflow) <|>
+  (char 'v' >> return InexactTinyUnderflow) <|>
+  (char 'w' >> return TinyInexactUnderflow) <|>
+  (char 'o' >> return Overflow) <|>
   (char 'z' >> return DivisionByZero) <|>
   (char 'i' >> return Invalid)
   )
@@ -380,14 +479,14 @@ boolNum False = 0.0
 {- TODO:: Could use CFloat, CDouble
 TODO:: Consider endianness -}
 
--- eval :: ParsedTestCase -> Float
+eval :: ParsedTestCase -> String
 eval TestCase {format = f,
   operation = op,
   roundingMode = rm,
   trappedExceptions = te,
   inputs = is,
   output = o,
-  outputExceptions = oe} = o ++ " =? " ++
+  outputExceptions = oe} = 
     case f of
       BasicFormat Binary32 ->
         case op of
@@ -395,26 +494,73 @@ eval TestCase {format = f,
           Subtract ->  floatToHex  (i1 - i2)
           Multiply ->  floatToHex  (i1 * i2)
           Divide ->   floatToHex  (i1 / i2)
-          IsFinite -> show $ not (isInfinite i1)
+	  SquareRoot -> floatToHex $ sqrt i1
+	  Remainder -> floatToHex r where (_, r) = i1 `divMod'` i2 -- i1 bound to Integer
+	  RoundFloatToInteger -> floatToHex $ fromIntegral $ round i1 -- defaults to Double
+          ConvertFloatToFloat -> floatToHex i1 -- TODO::
+          Negate -> floatToHex $ negate i1
+	  Abs -> floatToHex $ abs i1
+	  Logb -> floatToHex $ log i1
+	  IsZero -> floatToHex $ boolNum (i1 == 0.0)
+	  IsSubNormal -> floatToHex $ boolNum $ isDenormalized i1
+          isSigned -> floatToHex $ boolNum $ i1 < 0.0
+          IsNaN -> floatToHex $ boolNum $ isNaN i1
+	  isFinite -> floatToHex $ boolNum $ not $ isInfinite i1 
+	  isInf -> floatToHex $ boolNum $ isInfinite i1 
           _ -> "Unimplemented op: "  ++ show op
         where
 	  i1 :: Float
           i1 = hexToFloat $ head is
 	  i2 :: Float
           i2 = hexToFloat $ head $ tail is
+
       BasicFormat Binary64 ->
         case op of
-          Add -> floatToHex (i1 + i2)
+          Add -> floatToHex  (i1 + i2)
           Subtract ->  floatToHex  (i1 - i2)
           Multiply ->  floatToHex  (i1 * i2)
           Divide ->   floatToHex  (i1 / i2)
-          IsFinite -> show $ not (isInfinite i1)
+	  SquareRoot -> floatToHex $ sqrt i1
+	  Remainder -> floatToHex r where (_, r) = i1 `divMod'` i2 -- i1 bound to Integer
+	  RoundFloatToInteger -> floatToHex $ fromIntegral $ round i1 -- defaults to Double
+          ConvertFloatToFloat -> floatToHex i1 -- TODO::
+          Negate -> floatToHex $ negate i1
+	  Abs -> floatToHex $ abs i1
+	  Logb -> floatToHex $ log i1
+	  IsZero -> floatToHex $ boolNum (i1 == 0.0)
+	  IsSubNormal -> floatToHex $ boolNum $ isDenormalized i1
+          isSigned -> floatToHex $ boolNum $ i1 < 0.0
+          IsNaN -> floatToHex $ boolNum $ isNaN i1
+	  isFinite -> floatToHex $ boolNum $ not $ isInfinite i1 
+	  isInf -> floatToHex $ boolNum $ isInfinite i1 
           _ -> "Unimplemented op: "  ++ show op
         where
 	  i1 :: Double
           i1 = hexToFloat $ head is
 	  i2 :: Double
           i2 = hexToFloat $ head $ tail is
+
+      _ -> "Unimplemented format: " ++ show f
+
+
+checkResult :: ParsedTestCase -> String
+checkResult t@TestCase { output = o, outputExceptions = oe} =
+  case take (length "Unimplemented") et ==  "Unimplemented" of
+    True -> "."
+    False -> case  strcmp et o of
+               True -> "Success!"
+               False -> eval t ++ "/=" ++ show o
+  where et = eval t
+
+-- Case insensitive string comparison
+strcmp :: String -> String -> Bool
+strcmp [] [] = True
+strcmp s1 s2 = case (s1, s2) of
+  (s11:ss1, s21:ss2)
+    | toUpper s11 == toUpper s21 -> strcmp ss1 ss2
+    | otherwise -> False
+  _ -> False
+
 
 -- -- Helper functions to work with Hex floating point format
 
@@ -426,6 +572,8 @@ hexToFloat s
   | s == "-Inf" = negate 1.0/0.0
   | s == "Q" = 0/0
   | s == "S" = signallingNaN
+  | s == "true" = 1.0
+  | s == "false" = 0.0
   | otherwise =
       case parse hexToFloat' "hexToFloat" s of
         Left err -> error ("Invalid hex format floating point number '" ++ s ++ "' :" ++ show err)
@@ -452,7 +600,7 @@ floatToHex x
   | isInfinite x = "-Inf"
   | isNegativeZero x = "-Zero"
   | x == 0.0 = "+Zero"
-  | isDenormalized x = "Denormalized"
+--  | isDenormalized x = "Denormalized"
   | not (isIEEE x) = "Not an IEEE floating point number: " ++ show x
   | x < 0 = '-' : binaryDigitsToString (floatToDigits 2 (-x))
   | otherwise = binaryDigitsToString (floatToDigits 2 x)
@@ -466,7 +614,11 @@ floatToHex x
 
       normalizedBinaryFractionToString :: ([Int], Int) -> String
       normalizedBinaryFractionToString (nbf, n) =
-        binaryToHex nbf ++ "p" ++ show n
+        binaryToHex nbf ++ "P" ++ exponentSign n ++ show n
+          where
+	    exponentSign s
+	      | s < 0 = ""
+	      | otherwise = "+"
 
       binaryToHex :: [Int] -> String
       binaryToHex (a : b : c : d : es) =
@@ -485,34 +637,39 @@ prop_FloatHex f = hexToFloat (floatToHex f) == f
 parseTestCaseFile :: String -> Either ParseError [ParsedTestCase]
 parseTestCaseFile = parse testCaseFile "parseTestCaseFile"
 
-
--- Parse test cases in a file
-parseTestCases :: String -> IO ()
-parseTestCases f = do
-  result <- parseFromFile testCaseFile f
-  case result of
-    Left err -> do
-                  print err
-                  error "failed"
-    Right xs -> do
-                  print f
-                  print xs
-
-
 parseTests :: IO ()
 parseTests = mapM_ parseTestCases testFiles
-
-evalTestCases :: String -> IO ()
-evalTestCases f = do
-  result <- parseFromFile testCaseFile f
-  case result of
-    Left err -> do
-                  print err
-		  error "failed"
-    Right xs -> print (map eval xs)
+  where
+    -- Parse test cases in a file
+    parseTestCases :: String -> IO ()
+    parseTestCases f = do
+      result <- parseFromFile testCaseFile f
+      case result of
+        Left err -> do
+                      print err
+                      error "failed"
+        Right xs -> do
+                      print f
+                      print xs
 
 evalTests :: IO()
 evalTests = mapM_ evalTestCases testFiles
+  where
+    evalTestCases :: String -> IO ()
+    evalTestCases f = do
+      result <- parseFromFile testCaseFile f
+      case result of
+        Left err -> do
+                      print err
+    		      error "Test case file failed to parse"
+        Right xs -> print (map checkResult xs)
+    
+
+check :: String
+check =
+  case parse testCaseSpec "" "b32?i =0 +1.000000P0 -> 0x0\nb32+ =0 i +0.000001P-126 +1.000000P-126 -> +1.000001P-126" of
+  Left err -> show err
+  Right t -> checkResult t 
 
 
 
