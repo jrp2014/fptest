@@ -39,9 +39,9 @@ class Show a => Display a where
   displayList :: [a] -> String
   displayList [] = ""
   displayList [x] = display x
-  displayList (x:xs) = display x ++ " " ++ displayList xs
+  displayList (x : xs) = display x ++ " " ++ displayList xs
 
-  printd :: a -> IO()
+  printd :: a -> IO ()
   printd = putStrLn . display
 
 instance Display a => Display [a] where
@@ -200,7 +200,7 @@ instance (Display a, Show a) => Display (TestCase a) where
 
   displayList [] = ""
   displayList [t] = display t
-  displayList (t:ts) = display t ++ "\n" ++ displayList ts
+  displayList (t : ts) = display t ++ "\n" ++ displayList ts
 
 
 -- -------------------- Test Case File Parser ----------------------------------
@@ -683,11 +683,11 @@ evalTests = mapM_ evalTestCases testFiles
         Left err -> do
                       print err
                       error "Test case file failed to parse"
-        --Right xs -> mapM_ print (map checkResult xs)
+        -- Right xs -> mapM_ print (map checkResult xs)
         Right xs -> putStrLn $ unlines (map checkResult xs)
 
 
-main :: IO()
+main :: IO ()
 main = evalTests
 
 check :: String
