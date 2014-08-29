@@ -1,3 +1,4 @@
+-- {-# LANGUAGE NoMonomorphismRestriction #-}
 module FPTest where
 
 -- import Text.Parsec
@@ -11,7 +12,7 @@ import Data.Char (toUpper)
 import Data.Word (Word64, Word32)
 import Unsafe.Coerce (unsafeCoerce)
 
--- TODO:: Text.Parsec.Number accepts only lower case "p"
+-- TODO:: Haskell does not support signalling NaNs 
 
 {- From "Floating-Point Test-Suite for IEEE", IBM Labs in Haifa, FPgen team.
  - Contact: Merav Aharoni
@@ -69,6 +70,7 @@ instance Display (Format) where
   display (ComparisonFormat bf1 bf2) = display bf1 ++ display bf2
 
 
+-- only b32 (Float) and b64 (Double) tests are implemented
 data BasicFormat = Binary32 | Binary64 | Binary128 |
   Decimal32 | Decimal64 | Decimal128 deriving (Show, Eq)
 
@@ -171,8 +173,7 @@ instance Display (Exception) where
 {- This type is for the parsed test cases
 The operands are kept as strings so that
 we can test different functions for parsing them.
-TODO:: take the format out of the record and make it a parameter of
-TestCase, so that we can write different eval instances. -}
+-}
 data TestCase operationType = TestCase {
   format :: Format,
   operation :: Operation,
@@ -184,7 +185,8 @@ data TestCase operationType = TestCase {
   } deriving (Show)
 
 type ParsedTestCase = TestCase String
-type InterpretedTestCase = TestCase Float
+
+
 
 instance (Display a, Show a) => Display (TestCase a) where
   display TestCase {
@@ -481,98 +483,129 @@ outputExceptions = outputExceptions t
 type Quad = Double
 
 
+ -- Some example code that allows NaNs to signal, from
+ -- http://stackoverflow.com/questions/21344139/ieee-floating-point-signalling-nan-snan-in-haskell
+ -- No good for us here, as haskell does not handle signalling at all
+
+-- {-# LANGUAGE ForeignFunctionInterface #-}
+-- import Data.Word (Word64, Word32)
+-- import Unsafe.Coerce
+-- import Foreign
+-- import Foreign.C.Types
+-- foreign import ccall "fenv.h feenableexcept" -- GNU extension
+--     enableexcept :: CInt -> IO ()
+
 class (RealFloat a, Show a) => HasNaN a where
     signallingNaN :: a
     quietNaN :: a
 
 instance HasNaN Double where
-    signallingNaN = unsafeCoerce (0x7ff4000000000000 :: Word64)
-    quietNaN = unsafeCoerce (0x7ff8000000000000 :: Word64)
+    signallingNaN = unsafeCoerce (0x7ff4000000000000::Word64)
+    quietNaN = unsafeCoerce (0x7ff8000000000000::Word64)
 
 instance HasNaN Float where
-    signallingNaN = unsafeCoerce (0x7fa00000 :: Word32)
-    quietNaN = unsafeCoerce (0x7fc00000 :: Word32)
+    signallingNaN = unsafeCoerce (0x7fa00000::Word32)
+    quietNaN = unsafeCoerce (0x7fc00000::Word32)
+
+-- main = do
+--     enableexcept 1 -- FE_INVALID in my system
+--     print $ show $ 1 + (quietNaN :: Float) -- works
+--     print $ show $ 1 + (signalingNaN :: Float) -- fails
+-- 
+
 
 boolNum :: RealFloat f => Bool -> f
 boolNum True = 1.0
 boolNum False = 0.0
 
+type ErrMsg = String
+type Evaluation a = Either ErrMsg a
 
-{- TODO:: Could use CFloat, CDouble
-TODO:: Consider endianness -}
 
-eval :: ParsedTestCase -> String
-eval TestCase {format = f,
-  operation = op,
-  roundingMode = rm,
-  trappedExceptions = te,
-  inputs = is,
-  output = o,
-  outputExceptions = oe} =
-    case f of
-      BasicFormat Binary32 ->
-        case op of
-          Add -> floatToHex (i1 + i2)
-          Subtract -> floatToHex (i1 - i2)
-          Multiply -> floatToHex (i1 * i2)
-          Divide -> floatToHex (i1 / i2)
-          SquareRoot -> floatToHex $ sqrt i1
-          Remainder -> floatToHex r where (_, r) = i1 `divMod'` i2 -- i1 bound to Integer
-          RoundFloatToInteger -> floatToHex $ fromIntegral $ round i1 -- defaults to Double
-          ConvertFloatToFloat -> floatToHex i1 -- TODO::
-          Negate -> floatToHex $ negate i1
-          Abs -> floatToHex $ abs i1
-          Logb -> floatToHex $ log i1
-          IsZero -> floatToHex $ boolNum (i1 == 0.0)
-          IsSubNormal -> floatToHex $ boolNum $ isDenormalized i1
-          IsSigned -> floatToHex $ boolNum $ i1 < 0.0
-          IsNaN -> floatToHex $ boolNum $ isNaN i1
-          IsFinite -> floatToHex $ boolNum $ not $ isInfinite i1
-          IsInf -> floatToHex $ boolNum $ isInfinite i1
-          _ -> "Unimplemented op: " ++ show op
-        where
-          i1 :: Float
-          i1 = hexToFloat $ head is
-          i2 :: Float
-          i2 = hexToFloat $ head $ tail is
+class (RealFloat a, HasNaN a) => Eval a where
+  evaluate :: Operation -> [String] -> Evaluation a
+  evaluate op is =
+    case op of
+      Add -> return $ i1 + i2
+      Subtract -> return $ i1 - i2
+      Multiply -> return $ i1 * i2
+      Divide -> return $ i1 / i2
+      FusedMultiplyAdd -> unimplemented
+      SquareRoot -> return $ sqrt i1
+      Remainder -> return r where (_, r) = i1 `divMod'` i2 -- i1 bound to Integer
+      RoundFloatToInteger -> return $ fromIntegral $ round i1 -- defaults to Double
+      ConvertFloatToFloat -> return i1 -- ?
+      ConvertFloatToInteger -> unimplemented
+      ConvertIntegerToFloat -> unimplemented
+      ConvertDecimalToString -> unimplemented
+      ConvertStringToDecimal -> unimplemented
+      QuietComparison -> return $ boolNum (i1 == i2)
+      SignallingComparison -> unimplemented
+      Copy -> return i1
+      Negate -> return $ negate i1
+      Abs -> return $ abs i1
+      CopySign -> unimplemented
+      Scalb -> unimplemented
+      Logb -> return $ log i1
+      NextAfter -> unimplemented
+      Class -> unimplemented
+      IsSigned -> return $ boolNum $ i1 < 0.0
+      IsNormal -> return $ boolNum $ not $ isDenormalized i1
+      IsFinite -> return $ boolNum $ not $ isInfinite i1
+      IsZero -> return $ boolNum $ i1 == 0.0
+      IsSubNormal -> return $ boolNum $ isDenormalized i1
+      IsInf -> return $ boolNum $ isInfinite i1
+      IsNaN -> return $ boolNum $ isNaN i1
+      IsSignalling -> unimplemented
+      MinNum -> return $ min i1 i2 
+      MaxNum -> return $ max i1 i2
+      MinNumMag -> return $ min (abs i1) (abs i2)
+      MaxNumMag -> return $ max (abs i1) (abs i2)
+      SameQuantum -> unimplemented -- only applicable to Decimal operands
+      Quantize -> unimplemented -- only applicable to Decimal operands
+      NextUp -> unimplemented
+      NextDown -> unimplemented
+      Equivalent -> unimplemented
+    where
+      i1 = hexToFloat $ head is
+      i2 = hexToFloat $ head $ tail is
 
-      BasicFormat Binary64 ->
-        case op of
-          Add -> floatToHex (i1 + i2)
-          Subtract -> floatToHex (i1 - i2)
-          Multiply -> floatToHex (i1 * i2)
-          Divide -> floatToHex (i1 / i2)
-          SquareRoot -> floatToHex $ sqrt i1
-          Remainder -> floatToHex r where (_, r) = i1 `divMod'` i2 -- i1 bound to Integer
-          RoundFloatToInteger -> floatToHex $ fromIntegral $ round i1 -- defaults to Double
-          ConvertFloatToFloat -> floatToHex i1 -- TODO::
-          Negate -> floatToHex $ negate i1
-          Abs -> floatToHex $ abs i1
-          Logb -> floatToHex $ log i1
-          IsZero -> floatToHex $ boolNum (i1 == 0.0)
-          IsSubNormal -> floatToHex $ boolNum $ isDenormalized i1
-          IsSigned -> floatToHex $ boolNum $ i1 < 0.0
-          IsNaN -> floatToHex $ boolNum $ isNaN i1
-          IsFinite -> floatToHex $ boolNum $ not $ isInfinite i1
-          IsInf -> floatToHex $ boolNum $ isInfinite i1
-          _ -> "Unimplemented op: " ++ show op
-        where
-          i1 :: Double
-          i1 = hexToFloat $ head is
-          i2 :: Double
-          i2 = hexToFloat $ head $ tail is
+      unimplemented :: Either ErrMsg a
+      unimplemented = Left $ show op ++ " " ++ show is ++ " is unimplemented"
 
-      _ -> "Unimplemented format: " ++ show f
-
+{- TODO:: Consider endianness -}
+instance Eval Float
+instance Eval Double
+--instance Eval CFloat
+--instance Eval CDouble
 
 checkResult :: ParsedTestCase -> String
-checkResult t@TestCase { output = o, outputExceptions = oe}
-  | take (length "Unimplemented") et == "Unimplemented" = "."
-  | strcmp et o = display t ++ ": Success!"
-  | o == "#" = display t ++ ": No output expected: " ++ et
-  | otherwise = display t ++ ": " ++ et ++ " /= " ++ display o
-  where et = eval t
-
+checkResult t@TestCase { format = f,
+  operation = op,
+  -- roundingMode = rm,
+  -- trappedExceptions = te,
+  inputs = is,
+  output = o
+  -- outputExceptions = oe
+  } = display t ++ ": " ++
+    case f of
+      BasicFormat Binary32 ->
+        case evaluate op is ::  Evaluation Float of
+          Left err -> err
+          Right x
+            | o == "#" -> "No output expected: " ++ show x
+            | floatToHex x == o -> "Success!"
+            | otherwise ->  show x ++ " /= " ++ display o
+      BasicFormat Binary64 ->
+        case evaluate op is :: Evaluation Double of
+          Left err -> err
+          Right x
+            | o == "#" -> "No output expected: " ++ show x
+            | floatToHex x == o ->  "Success!"
+            | otherwise -> show x ++ " /= " ++ display o
+      _ -> show f ++ " is an unimplemented floating point format" 
+    
+  
 -- Case insensitive string comparison
 strcmp :: String -> String -> Bool
 strcmp [] [] = True
@@ -629,15 +662,15 @@ floatToHex x
       binaryDigitsToString :: ([Int], Int) -> String
       binaryDigitsToString (1 : normalizedBinaryFraction, n ) = "1." ++
         normalizedBinaryFractionToString (normalizedBinaryFraction, n - 1)
-      binaryDigitsToString ([0], n ) = "Zero"
-      binaryDigitsToString ( 0 : denormalizedBinaryFraction, n) = "Denormalized"
+      binaryDigitsToString ([0], _ ) = "Zero"
+      binaryDigitsToString ( 0 : denormalizedBinaryFraction, _) = "Denormalized"
       binaryDigitsToString _ = error "binaryDigitsToString"
 
       normalizedBinaryFractionToString :: ([Int], Int) -> String
       normalizedBinaryFractionToString (nbf, n) =
         binaryToHex nbf ++ "P" ++ exponentSign n ++ show n
           where
-            exponentSign s
+            exponentSign s -- add a + sign for +ve exponents
               | s < 0 = ""
               | otherwise = "+"
 
@@ -650,6 +683,7 @@ floatToHex x
       binaryToHex [] = ""
 
 
+-- Tests
 prop_FloatHex :: (RealFloat a, HasNaN a, Show a) => a -> Bool
 prop_FloatHex f = hexToFloat (floatToHex f) == f
 
@@ -688,7 +722,10 @@ evalTests = mapM_ evalTestCases testFiles
 
 
 main :: IO ()
-main = evalTests
+main = do
+  quickCheck (prop_FloatHex :: Float -> Bool)
+  quickCheck (prop_FloatHex :: Double -> Bool)
+  evalTests
 
 check :: String
 check =
