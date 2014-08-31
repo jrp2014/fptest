@@ -12,12 +12,14 @@ import Data.Char (toUpper)
 import Data.Word (Word64, Word32)
 import Unsafe.Coerce (unsafeCoerce)
 
--- TODO:: Haskell does not support signalling NaNs 
-
 {- From "Floating-Point Test-Suite for IEEE", IBM Labs in Haifa, FPgen team.
  - Contact: Merav Aharoni
 
 https://www.research.ibm.com/haifa/projects/verification/fpgen/papers/ieee-test-suite-v2.pdf
+
+
+TODO :: This initial version uses only basic Haskell, and so does not manipulate the floating point environment
+for handling floating point exceptions, rounding mode, etc
 
 -}
 
@@ -95,46 +97,47 @@ data Operation = Add | Subtract | Multiply | Divide | FusedMultiplyAdd |
   NextUp | NextDown | Equivalent deriving (Show)
 
 instance Display (Operation) where
-  display Add = "+"
-  display Subtract = "-"
-  display Multiply = "*"
-  display Divide = "/"
-  display FusedMultiplyAdd = "*+"
-  display SquareRoot = "V"
-  display Remainder = "%"
-  display RoundFloatToInteger = "rfi"
-  display ConvertFloatToFloat = "cff"
-  display ConvertFloatToInteger = "cfi"
-  display ConvertIntegerToFloat = "cif"
-  display ConvertDecimalToString = "cfd"
-  display ConvertStringToDecimal = "cdf"
-  display QuietComparison = "qC"
-  display SignallingComparison = "sC"
-  display Copy = "cp"
-  display Negate = "~"
-  display Abs = "A"
-  display CopySign = "@"
-  display Scalb = "S"
-  display Logb = "L"
-  display NextAfter = "Na"
-  display Class = "?"
-  display IsSigned = "?-"
-  display IsNormal = "?n"
-  display IsFinite = "?f"
-  display IsZero = "?0"
-  display IsSubNormal = "?s"
-  display IsInf = "?i"
-  display IsNaN = "?N"
-  display IsSignalling = "?sN"
-  display MinNum = "<C"
-  display MaxNum = ">C"
-  display MinNumMag = "<A"
-  display MaxNumMag = ">A"
-  display SameQuantum = "=quant"
-  display Quantize = "quant"
-  display NextUp = "Nu"
-  display NextDown = "Nd"
-  display Equivalent = "eq"
+  display = show
+{- display Add = "+"
+display Subtract = "-"
+display Multiply = "*"
+display Divide = "/"
+display FusedMultiplyAdd = "*+"
+display SquareRoot = "V"
+display Remainder = "%"
+display RoundFloatToInteger = "rfi"
+display ConvertFloatToFloat = "cff"
+display ConvertFloatToInteger = "cfi"
+display ConvertIntegerToFloat = "cif"
+display ConvertDecimalToString = "cfd"
+display ConvertStringToDecimal = "cdf"
+display QuietComparison = "qC"
+display SignallingComparison = "sC"
+display Copy = "cp"
+display Negate = "~"
+display Abs = "A"
+display CopySign = "@"
+display Scalb = "S"
+display Logb = "L"
+display NextAfter = "Na"
+display Class = "?"
+display IsSigned = "?-"
+display IsNormal = "?n"
+display IsFinite = "?f"
+display IsZero = "?0"
+display IsSubNormal = "?s"
+display IsInf = "?i"
+display IsNaN = "?N"
+display IsSignalling = "?sN"
+display MinNum = "<C"
+display MaxNum = ">C"
+display MinNumMag = "<A"
+display MaxNumMag = ">A"
+display SameQuantum = "=quant"
+display Quantize = "quant"
+display NextUp = "Nu"
+display NextDown = "Nd"
+display Equivalent = "eq" -}
 
 data RoundingMode = PositiveInfinity | NegativeInfinity | Zero | NearestEven |
   NearestAwayFromZero deriving (Show)
@@ -185,7 +188,6 @@ data TestCase operationType = TestCase {
   } deriving (Show)
 
 type ParsedTestCase = TestCase String
-
 
 
 instance (Display a, Show a) => Display (TestCase a) where
@@ -483,35 +485,35 @@ outputExceptions = outputExceptions t
 type Quad = Double
 
 
- -- Some example code that allows NaNs to signal, from
- -- http://stackoverflow.com/questions/21344139/ieee-floating-point-signalling-nan-snan-in-haskell
- -- No good for us here, as haskell does not handle signalling at all
+ {- Some example code that allows NaNs to signal, from
+ http://stackoverflow.com/questions/21344139/ieee-floating-point-signalling-nan-snan-in-haskell
+ No good for us here, as haskell does not handle signalling at all -}
 
--- {-# LANGUAGE ForeignFunctionInterface #-}
--- import Data.Word (Word64, Word32)
--- import Unsafe.Coerce
--- import Foreign
--- import Foreign.C.Types
--- foreign import ccall "fenv.h feenableexcept" -- GNU extension
---     enableexcept :: CInt -> IO ()
+{- {-# LANGUAGE ForeignFunctionInterface #-}
+import Data.Word (Word64, Word32)
+import Unsafe.Coerce
+import Foreign
+import Foreign.C.Types
+foreign import ccall "fenv.h feenableexcept" -- GNU extension
+enableexcept :: CInt -> IO () -}
 
 class (RealFloat a, Show a) => HasNaN a where
     signallingNaN :: a
     quietNaN :: a
 
 instance HasNaN Double where
-    signallingNaN = unsafeCoerce (0x7ff4000000000000::Word64)
-    quietNaN = unsafeCoerce (0x7ff8000000000000::Word64)
+    signallingNaN = unsafeCoerce (0x7ff4000000000000 :: Word64)
+    quietNaN = unsafeCoerce (0x7ff8000000000000 :: Word64)
 
 instance HasNaN Float where
-    signallingNaN = unsafeCoerce (0x7fa00000::Word32)
-    quietNaN = unsafeCoerce (0x7fc00000::Word32)
+    signallingNaN = unsafeCoerce (0x7fa00000 :: Word32)
+    quietNaN = unsafeCoerce (0x7fc00000 :: Word32)
 
--- main = do
---     enableexcept 1 -- FE_INVALID in my system
---     print $ show $ 1 + (quietNaN :: Float) -- works
---     print $ show $ 1 + (signalingNaN :: Float) -- fails
--- 
+{- main = do
+enableexcept 1 -- FE_INVALID in my system
+print $ show $ 1 + (quietNaN :: Float) -- works
+print $ show $ 1 + (signalingNaN :: Float) -- fails
+ -}
 
 
 boolNum :: RealFloat f => Bool -> f
@@ -519,12 +521,17 @@ boolNum True = 1.0
 boolNum False = 0.0
 
 type ErrMsg = String
-type Evaluation a = Either ErrMsg a
+type Output a = Either ErrMsg a
 
-
-class (RealFloat a, HasNaN a) => Eval a where
-  evaluate :: Operation -> [String] -> Evaluation a
-  evaluate op is =
+execute :: (RealFloat a, HasNaN a) => ParsedTestCase -> Output a
+execute t@TestCase { format = f,
+operation = op,
+  {- roundingMode = rm,
+  trappedExceptions = te, -}
+  inputs = is,
+  output = o
+  -- outputExceptions = oe
+  } =
     case op of
       Add -> return $ i1 + i2
       Subtract -> return $ i1 - i2
@@ -544,11 +551,13 @@ class (RealFloat a, HasNaN a) => Eval a where
       Copy -> return i1
       Negate -> return $ negate i1
       Abs -> return $ abs i1
-      CopySign -> unimplemented
-      Scalb -> unimplemented
+      CopySign -> unimplemented {- Copysign(x, y) returns x with the sign of y.
+                                Hence, abs(x) = copysign( x, 1.0), even if x is NaN -}
+      Scalb -> unimplemented {- Scalb(y, N) returns y × 2N for integral values N
+                             without computing 2N -}
       Logb -> return $ log i1
       NextAfter -> unimplemented
-      Class -> unimplemented
+      Class -> return $ fpclass i1
       IsSigned -> return $ boolNum $ i1 < 0.0
       IsNormal -> return $ boolNum $ not $ isDenormalized i1
       IsFinite -> return $ boolNum $ not $ isInfinite i1
@@ -557,7 +566,7 @@ class (RealFloat a, HasNaN a) => Eval a where
       IsInf -> return $ boolNum $ isInfinite i1
       IsNaN -> return $ boolNum $ isNaN i1
       IsSignalling -> unimplemented
-      MinNum -> return $ min i1 i2 
+      MinNum -> return $ min i1 i2
       MaxNum -> return $ max i1 i2
       MinNumMag -> return $ min (abs i1) (abs i2)
       MaxNumMag -> return $ max (abs i1) (abs i2)
@@ -570,42 +579,44 @@ class (RealFloat a, HasNaN a) => Eval a where
       i1 = hexToFloat $ head is
       i2 = hexToFloat $ head $ tail is
 
+      fpclass x
+      -- | x is signalling NaN = 0.0
+        | isNaN x = 1.0 -- quiet NaN (x != x)
+        | x < 0.0 && isInfinite x = 2.0           -- -INFINITY
+        | x < 0.0 && not (isDenormalized x) &&
+                     not (isNegativeZero x) = 3.0 -- negative normalized nonzero
+        | x < 0.0 && isDenormalized x = 4.0       -- negative denormalized
+        | isNegativeZero x = 5.0
+        | x == 0.0 = 6.0
+        | x > 0.0 && isDenormalized x = 7.0       -- positive denormalized
+        | x > 0.0 && not (isDenormalized x) = 8.0 -- positive normalized nonzero
+        | x > 0.0 && isInfinite x = 9.0           -- +INFINITY
+        | otherwise = 10.0
+
       unimplemented :: Either ErrMsg a
       unimplemented = Left $ show op ++ " " ++ show is ++ " is unimplemented"
 
-{- TODO:: Consider endianness -}
-instance Eval Float
-instance Eval Double
---instance Eval CFloat
---instance Eval CDouble
-
 checkResult :: ParsedTestCase -> String
 checkResult t@TestCase { format = f,
-  operation = op,
-  -- roundingMode = rm,
-  -- trappedExceptions = te,
-  inputs = is,
-  output = o
-  -- outputExceptions = oe
+  output = o,
+  outputExceptions = oe
   } = display t ++ ": " ++
     case f of
       BasicFormat Binary32 ->
-        case evaluate op is ::  Evaluation Float of
-          Left err -> err
-          Right x
-            | o == "#" -> "No output expected: " ++ show x
-            | floatToHex x == o -> "Success!"
-            | otherwise ->  show x ++ " /= " ++ display o
+        checkResult' ( execute t :: Output Float )
       BasicFormat Binary64 ->
-        case evaluate op is :: Evaluation Double of
+        checkResult' ( execute t :: Output Double )
+      _ -> show f ++ " is an unimplemented floating point format"
+    where
+      checkResult' e =
+        case e of
           Left err -> err
-          Right x
-            | o == "#" -> "No output expected: " ++ show x
-            | floatToHex x == o ->  "Success!"
-            | otherwise -> show x ++ " /= " ++ display o
-      _ -> show f ++ " is an unimplemented floating point format" 
-    
-  
+          Right result
+            | o == "#" -> "No output expected: " ++ show result
+            | floatToHex result == o -> "Success!"
+            | otherwise -> floatToHex result ++ " (" ++ show result ++ ") /= " ++ display o
+
+
 -- Case insensitive string comparison
 strcmp :: String -> String -> Bool
 strcmp [] [] = True
@@ -624,7 +635,7 @@ hexToFloat s
   | s == "-Zero" = -0.0
   | s == "+Inf" = 1 / 0
   | s == "-Inf" = negate 1.0 / 0.0
-  | s == "Q" = 0 / 0
+  | s == "Q" = quietNaN -- 0 / 0
   | s == "S" = signallingNaN
   | s == "true" = 1.0
   | s == "false" = 0.0
@@ -647,9 +658,9 @@ hexToFloat s
 TODO:: refactor this in terms of encodeFloat, signCharificand, etc -}
 
 -- The hex format of float
-floatToHex :: (RealFloat a, Show a) => a -> String
+floatToHex :: (RealFloat a, Show a, HasNaN a) => a -> String
 floatToHex x
-  | isNaN x = "NaN"
+  | isNaN x = "Q" -- Haskell seems to use only quiet NaNs
   | isInfinite x && x > 0 = "+Inf"
   | isInfinite x = "-Inf"
   | isNegativeZero x = "-Zero"
