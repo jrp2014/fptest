@@ -1,3 +1,5 @@
+module QTrial where
+
 import Data.Either
 import Test.QuickCheck
 import Foreign.C.Types
@@ -116,7 +118,7 @@ TODO:: overload for tuples, reduce tolerace to 1e-15 for doubles -}
 infix 4 ~==
 (~==) :: RealFloat a => a -> a -> Bool
 x ~== y
-  | isNaN x || isNaN y = True
+  | isNaN x || isNaN y = True -- would otherwise generate false
   | otherwise = abs (x - y) < 1.0e-6 * abs x
 
 
@@ -171,7 +173,7 @@ instance Arbitrary CDouble where
   shrink = shrinkRealFrac
 
 
--- Gather the unit tests
+-- Gather the QuickCheck unit tests
 
 unittests = [
     testGroup "test1" [
@@ -205,11 +207,6 @@ unittests = [
       testProperty "CDouble" prop_test5cd
     ]
   ]
-
-
--- Run all the tests
-
--- main = defaultMain tests
 
 
 main :: IO ()
