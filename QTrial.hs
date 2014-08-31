@@ -4,7 +4,7 @@ import Foreign.C.Types
 import Test.Framework (defaultMain, testGroup)
 import Test.Framework.Providers.QuickCheck2
 
-{- From IEEE Standard 754 for Binary Floating-Point Arithmetic
+{- From "IEEE Standard 754 for Binary Floating-Point Arithmetic"
 by
 Prof. W. Kahan
 Elect. Eng. & Computer Science
@@ -13,8 +13,8 @@ Berkeley CA 94720-1776
 
 http://www.eecs.berkeley.edu/~wkahan/ieee754status/IEEE754.PDF -}
 
-{- This function computes the roots x1 and x2 of
-Quadradic of the form p*x^2 - 2 q*x + r == 0
+{- qdrtc computes the roots x1 and x2 of
+quadradic of the form p*x^2 - 2 q*x + r == 0
 as accuractely as they are determined by p, q, r -}
 qdrtc :: RealFloat a => a -> a -> a -> (a, a)
 qdrtc p q r
@@ -41,13 +41,14 @@ copysign :: RealFloat a => a -> a -> a
 copysign x y
   | isNaN y = 0 / 0
   | signum x == signum y = x
-  | otherwise =  -x
+  | otherwise = -x
 
 
 log2 :: RealFloat a => a -> a
 log2 x = logBase 2 (abs x)
 
 -- Haskell's min is not symmetric in the presence of a NaN
+min' :: RealFloat a => a -> a -> a
 min' x y
   | isNaN x || isNaN y = 0 / 0
   | otherwise = min x y
@@ -100,7 +101,7 @@ qtest raw = unlines (map (either id snd) raw) ++
 
 
 {- QuickCheck testing
-Illustrates numerical instability -}
+Illustrates numerical instability, as need to ignore NaNs to pass -}
 floatQTest :: [Either String (Float, String)]
 floatQTest = qtestraw
 doubleQTest :: [Either String (Double, String)]
@@ -110,13 +111,16 @@ cfloatQTest = qtestraw
 cdoubleQTest :: [Either String (CDouble, String)]
 cdoubleQTest = qtestraw
 
--- Approximately equal, ignoring isNaN
--- TODO:: overload for tuples, reduce tolerace to 1e-15 for doubles
+{- Approximately equal, ignoring isNaN
+TODO:: overload for tuples, reduce tolerace to 1e-15 for doubles -}
 infix 4 ~==
 (~==) :: RealFloat a => a -> a -> Bool
-x ~== y 
+x ~== y
   | isNaN x || isNaN y = True
   | otherwise = abs (x - y) < 1.0e-6 * abs x
+
+
+-- These test the properties of qdrtc given in the paper
 
 test1 f p = p /= 0 ==> f p 0 0 == (0, 0)
 prop_test1f = test1 floatQdrtc
@@ -155,21 +159,21 @@ prop_test5d = test5 doubleQdrtc
 prop_test5cf = test5 cfloatQdrtc
 prop_test5cd = test5 cdoubleQdrtc
 
--- (Orphan) instances, as they are defined neither in Foreign.C.Types,
--- nor in Test.QuickCheck
+{- (Orphan) instances, as they are defined neither in Foreign.C.Types,
+not in Test.QuickCheck -}
 
 instance Arbitrary CFloat where
   arbitrary = arbitrarySizedFractional
-  shrink    = shrinkRealFrac
+  shrink = shrinkRealFrac
 
 instance Arbitrary CDouble where
   arbitrary = arbitrarySizedFractional
-  shrink    = shrinkRealFrac
+  shrink = shrinkRealFrac
 
 
--- Gather the tests
+-- Gather the unit tests
 
-tests = [
+unittests = [
     testGroup "test1" [
       testProperty "Float" prop_test1f,
       testProperty "Double" prop_test1d,
@@ -205,12 +209,13 @@ tests = [
 
 -- Run all the tests
 
---main = defaultMain tests
+-- main = defaultMain tests
 
 
 main :: IO ()
 main = do
 
+  putStrLn "Principal Tests:"
   putStrLn "\nResults for Float:"
   putStrLn $ qtest floatQTest
 
@@ -224,4 +229,4 @@ main = do
   putStrLn $ qtest cdoubleQTest
 
   putStrLn "\n\nUnit Tests:"
-  defaultMain tests
+  defaultMain unittests
