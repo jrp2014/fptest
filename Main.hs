@@ -4,11 +4,14 @@ module FPTest where
 -- import Text.Parsec
 import Text.ParserCombinators.Parsec
 import Text.Parsec.Number
+-- import ParsecNumber
 import Numeric
 import Control.Monad (liftM, ap)
 import Test.QuickCheck hiding (output)
 import Data.Fixed (divMod')
 import Data.Char (toUpper)
+import Data.Either (rights)
+import Data.List (intercalate)
 import Data.Word (Word64, Word32)
 import Unsafe.Coerce (unsafeCoerce)
 
@@ -40,9 +43,7 @@ class Show a => Display a where
   display = show
 
   displayList :: [a] -> String
-  displayList [] = ""
-  displayList [x] = display x
-  displayList (x : xs) = display x ++ " " ++ displayList xs
+  displayList list = unwords (map display list)
 
   printd :: a -> IO ()
   printd = putStrLn . display
@@ -151,7 +152,7 @@ instance Display (RoundingMode) where
 
 
 data TrappedException = TrappedInexact | TrappedUnderflow | TrappedOverflow |
-  TrappedDivisionByZero | TrappedInvalid deriving (Show)
+  TrappedDivisionByZero | TrappedInvalid deriving (Show, Eq)
 
 instance Display (TrappedException) where
   display TrappedInexact = "x"
@@ -199,12 +200,10 @@ instance (Display a, Show a) => Display (TestCase a) where
   inputs = ins,
   output = out,
   outputExceptions = oe} =
-    display f ++ display op ++ " " ++ display rm ++ " " ++ display te ++ " " ++ display ins ++ " -> "
+    display f ++ "{" ++ display op ++ "}" ++ display rm ++ " " ++ display te ++ " " ++ display ins ++ " -> "
       ++ display out ++ " " ++ display oe
 
-  displayList [] = ""
-  displayList [t] = display t
-  displayList (t : ts) = display t ++ "\n" ++ displayList ts
+  displayList list = intercalate "\n" (map display list)
 
 
 -- -------------------- Test Case File Parser ----------------------------------
@@ -366,6 +365,7 @@ inputSpec = operandSpec `sepEndBy1` char ' '
 outputSpec :: GenParser Char st String
 outputSpec = operandSpec <|> (char '#' >> return "#")
 
+-- This is really hex
 binaryFloatingPoint :: GenParser Char st String
 binaryFloatingPoint =
   try (do
@@ -596,6 +596,98 @@ operation = op,
       unimplemented :: Either ErrMsg a
       unimplemented = Left $ show op ++ " " ++ show is ++ " is unimplemented"
 
+
+translate :: ParsedTestCase -> Either String String
+translate TestCase { format = f,
+operation = op,
+  roundingMode = rm,
+  trappedExceptions = te,
+  inputs = is,
+  output = o,
+  outputExceptions = oe
+  }
+  | te /= [] = Left $ "trapped exceptions unimplemented " ++ display te
+  | otherwise =
+      case f of
+        BasicFormat Binary32 -> translate' "F"
+        BasicFormat Binary64 -> translate' "D"
+        _ -> Left $ show f ++ " is not an implemented format"
+      where
+        translate' fmt =
+            case op of
+              Add -> return $ expected ++ i1 ++ " + " ++ i2
+              Subtract -> return $ expected ++ i1 ++ " - " ++ i2
+              Multiply -> return $ expected ++ i1 ++ " * " ++ i2
+              Divide -> return $ expected ++ i1 ++ " / " ++ i2
+              FusedMultiplyAdd -> unimplemented
+              SquareRoot -> return $ expected ++ "sqrt " ++ i1
+              Remainder -> return $ expected ++ "r where (_, r) = " ++ i1 ++ " `divMod'` " ++ i2
+              RoundFloatToInteger -> return $ expected ++ "round " ++ i1
+              ConvertFloatToFloat -> unimplemented
+              ConvertFloatToInteger -> unimplemented
+              ConvertIntegerToFloat -> unimplemented
+              ConvertDecimalToString -> unimplemented
+              ConvertStringToDecimal -> unimplemented
+              QuietComparison -> return $ expected ++ "boolNum (" ++ i1 ++ "==" ++ i2 ++ ")"
+              SignallingComparison -> unimplemented
+              Copy -> return $ expected ++ i1
+              Negate -> return $ expected ++ "negate " ++ i1
+              Abs -> return $ expected ++ "abs " ++ i1
+              CopySign -> unimplemented {- Copysign(x, y) returns x with the sign of y.
+                                        Hence, abs(x) = copysign( x, 1.0), even if x is NaN -}
+              Scalb -> unimplemented {- Scalb(y, N) returns y × 2N for integral values N
+                                     without computing 2N -}
+              Logb -> return $ expected ++ "log" ++ i1
+              NextAfter -> unimplemented
+              Class -> unimplemented
+              IsSigned -> return $ expected ++ "boolNum (signum " ++ i1 ++ " == -1.0)"
+              -- isNormal(x) is true if and only if x is normal (not zero, subnormal, infinite, or NaN).
+              IsNormal -> return $ expected ++ "boolNum (not ( isDenormalized " ++ i1 ++
+                 " || isInfinite " ++ i1 ++ "|| isNaN " ++ i1 ++ " || " ++ i1 ++ " == 0 ))"
+	      -- isFinite(x) is true if and only if x is zero, subnormal or normal (not infinite or NaN).
+              IsFinite -> return $ expected ++ "boolNum (not ( isInfinite " ++ i1 ++ " || isNaN " ++ i1 ++ "))"
+              IsZero -> return $ expected ++ "boolNum (0 == " ++ i1 ++ ")"
+              IsSubNormal -> return $ expected ++ "boolNum ( isDenormalized " ++ i1 ++ ")"
+              IsInf -> return $ expected ++ "boolNum (isInfinite " ++ i1 ++ ")"
+              IsNaN -> return $ expected ++ "boolNum (isNaN " ++ i1 ++ ")"
+              IsSignalling -> unimplemented
+              MinNum -> return $ expected ++ "min" ++ i1 ++ i2
+              MaxNum -> return $ expected ++ "max" ++ i1 ++ i2
+              MinNumMag -> unimplemented
+              MaxNumMag -> unimplemented
+              SameQuantum -> unimplemented -- only applicable to Decimal operands
+              Quantize -> unimplemented -- only applicable to Decimal operands
+              NextUp -> unimplemented
+              NextDown -> unimplemented
+              Equivalent -> unimplemented
+            where
+
+              expected = ot ++ " ~==? "
+
+              i1 = ft $ showHexToFloat $ head is
+              i2 = ft $ showHexToFloat $ head $ tail is
+
+              ot = ft $ showHexToFloat o
+
+              -- show will produce "Infinity", "NaN", etc, so wrap it
+              showHexToFloat s
+                | s == "+Zero" = "0.0"
+                | s == "-Zero" = "-0.0"
+                | s == "+Inf" = "1.0/0.0"
+                | s == "-Inf" = "(-1.0/0.0)"
+                | s == "Q" = "0/0"
+                | s == "S" = "0/0" -- for now.  Should really produce Left
+                | s == "#" = "-999.0" -- output is ignored, so no matter
+		| fmt == "F" = show (hexToFloat s :: Float)
+                | otherwise = show (hexToFloat s :: Double)
+
+              ft :: String -> String
+              ft s = "(" ++ s ++ "::" ++ fmt ++ ")"
+
+              unimplemented :: Either String String
+              unimplemented = Left $ show op ++ " " ++ show is ++ " is unimplemented"
+
+-- Check the result of runnning the test directly
 checkResult :: ParsedTestCase -> String
 checkResult t@TestCase { format = f,
   output = o,
@@ -615,6 +707,21 @@ checkResult t@TestCase { format = f,
             | o == "#" -> "No output expected: " ++ show result
             | floatToHex result == o -> "Success!"
             | otherwise -> floatToHex result ++ " (" ++ show result ++ ") /= " ++ display o
+
+
+-- Translate the test into a diagnostic String or an HUnit test
+translateResult :: ParsedTestCase -> Either String String
+translateResult t@TestCase { format = f,
+  operation = op,
+  {- roundingMode = rm,
+  trappedExceptions = te, -}
+  inputs = is,
+  output = o
+  -- outputExceptions = oe
+  } =
+    case translate t of
+    Left diagnostic -> Left diagnostic
+    Right testtext -> return $ "\" " ++ display t ++ "\" ~: (" ++ testtext ++ ")"
 
 
 -- Case insensitive string comparison
@@ -732,11 +839,63 @@ evalTests = mapM_ evalTestCases testFiles
         Right xs -> putStrLn $ unlines (map checkResult xs)
 
 
+translateTests :: IO ()
+translateTests = mapM_ translateTestCases testFiles
+  where
+    translateTestCases :: String -> IO ()
+    translateTestCases f = do
+      result <- parseFromFile testCaseFile f
+      case result of
+        Left err -> do
+                      print err
+                      error "Test case file failed to parse"
+        Right xs -> do
+          putStrLn "module FPTestTest where\n\n"
+          putStrLn "import Test.HUnit\n"
+          putStrLn "type D = Double"
+          putStrLn "type F = Float\n"
+          putStrLn "boolNum :: RealFloat a => Bool -> a"
+          putStrLn "boolNum x"
+          putStrLn "  | x = 1"
+          putStrLn "  | otherwise = 0\n"
+
+          putStrLn "-- Version that treats NaN == NaN"
+          putStrLn "assertEqual' :: (Eq a, Show a, RealFloat a) => String -> a -> a -> Assertion"
+          putStrLn "assertEqual' preface expected actual ="
+          putStrLn " if (isNaN actual && isNaN expected) || (actual == expected)"
+          putStrLn " then return () else assertFailure msg"
+          putStrLn "    where msg = (if null preface then \"\" else preface ++ \"\\n\") ++"
+          putStrLn "                \"expected: \" ++ show expected ++ \"\\n but got: \" ++ show actual"
+          putStrLn ""
+          putStrLn "infix 1 @==?, @?==, ~==?, ~?=="
+          putStrLn ""
+          putStrLn "(@==?) :: (Eq a, Show a, RealFloat a) => a -> a -> Assertion"
+          putStrLn "expected @==? actual = assertEqual' \"\" expected actual"
+          putStrLn ""
+          putStrLn "(@?==) :: (Eq a, Show a, RealFloat a) => a -> a -> Assertion"
+          putStrLn "actual @?== expected = assertEqual' \"\" expected actual"
+          putStrLn ""
+          putStrLn "(~==?) :: (Eq a, Show a, RealFloat a) => a -> a -> Test"
+          putStrLn "expected ~==? actual = TestCase (expected @==? actual)"
+          putStrLn ""
+          putStrLn "(~?==) :: (Eq a, Show a, RealFloat a) => a -> a -> Test"
+          putStrLn "actual ~?== expected = TestCase (actual @?== expected)"
+          putStrLn ""
+
+          putStrLn "main :: IO Counts"
+          putStrLn "main = runTestTT tests"
+
+          putStr $ "tests = " ++ show f ++ " ~: [\n  "
+          putStr $ intercalate ",\n  " (rights (map translateResult xs))
+          putStrLn "]"
+
+
 main :: IO ()
 main = do
-  quickCheck (prop_FloatHex :: Float -> Bool)
+  {- quickCheck (prop_FloatHex :: Float -> Bool)
   quickCheck (prop_FloatHex :: Double -> Bool)
-  evalTests
+  evalTests -}
+  translateTests
 
 check :: String
 check =
@@ -747,7 +906,7 @@ check =
 
 testFiles :: [String]
 testFiles = map ("test_suite/" ++)
-  [ "Basic-Types-Inputs.fptest"]
+  [ "Basic-Types-Intermediate.fptest"]
 
 saveTestFiles :: [String]
 saveTestFiles =
