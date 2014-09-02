@@ -178,6 +178,7 @@ prop_test4d = test4 doubleQdrtc
 prop_test4cf = test4 cfloatQdrtc
 prop_test4cd = test4 cdoubleQdrtc
 
+-- | TODO:: This test sometimes fails
 test5 f mu p q r = (mu * p) /= 0 ==> x1 ~== x1' && x2 ~== x2'
   where
     (x1, x2) = f p q r
