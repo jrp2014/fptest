@@ -7,7 +7,7 @@ There are two sets of tests so far:
 ##QTrial##
 **QTrial** is the floating point benchmark described in *IEEE Standard 754 for Binary Floating-Point Arithmetic* by Prof. W. Kahan [Download link](http://www.eecs.berkeley.edu/~wkahan/ieee754status/IEEE754.PDF)
 
-You should just be able to `runhaskell QTrial.hs` from `src`.
+You should just be able to `cabal run` from the main directory or `runhaskell QTrial.hs` from `src`.
 
 An extract from the result is:
 

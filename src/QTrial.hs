@@ -1,4 +1,29 @@
-module Main(main) where
+{-|
+Module      : Main
+Description : Floating point benchmark described in /IEEE Standard 754 for Binary Floating-Point Arithmetic/ by Prof. W. Kahan
+Copyright   : (c) John Pavel, 2014
+                  Prof W Kahan, 1997
+License     : BSD3
+Maintainer  : jrp@dial.pipex.com
+Stability   : experimental
+Portability : portable
+
+Adapted for Haskell from QTrial, described in /IEEE Standard 754 for Binary Floating-Point Arithmetic/
+by
+Prof. W. Kahan,
+Elect. Eng. & Computer Science,
+University of California,
+Berkeley CA 94720-1776
+
+<http://www.eecs.berkeley.edu/~wkahan/ieee754status/IEEE754.PDF>
+
+
+This module runs the tests in Float, Double and CFloat and CDouble formats.
+
+It would not be hard to adapt it to run other floating point formats.
+-}
+
+module Main where
 
 import Data.Either
 import Test.QuickCheck
@@ -6,18 +31,9 @@ import Foreign.C.Types
 import Test.Framework (defaultMain, testGroup)
 import Test.Framework.Providers.QuickCheck2
 
-{- From "IEEE Standard 754 for Binary Floating-Point Arithmetic"
-by
-Prof. W. Kahan
-Elect. Eng. & Computer Science
-University of California
-Berkeley CA 94720-1776
-
-http://www.eecs.berkeley.edu/~wkahan/ieee754status/IEEE754.PDF -}
-
 {- | 'qdrtc' computes the roots 'x1' and 'x2' of
-quadradic of the form 'p*x^2 - 2 q*x + r == 0'
-as accuractely as they are determined by 'p', 'q', 'r' -}
+quadradic of the form @p*x^2 - 2 q*x + r == 0@
+as accuractely as they are determined by 'p', 'q', and 'r' -}
 qdrtc :: RealFloat a => a -> a -> a -> (a, a)
 qdrtc p q r
   | ss == 0 = (r / p, r / p)
@@ -37,9 +53,9 @@ cdoubleQdrtc :: CDouble -> CDouble -> CDouble -> (CDouble, CDouble)
 cdoubleQdrtc = qdrtc
 
 
-{- | 'copysign(x, y)' returns 'x' with the sign of 'y'.
-Hence, 'abs(x) = copysign( x, 1.0)', even if 'x' is 'NaN'
-NB: Haskell's 'signum' returns 'signum NaN -> -1.0' in
+{- | @copysign(x, y)@ returns 'x' with the sign of 'y'.
+Hence, @abs(x) = copysign( x, 1.0)@, even if 'x' is 'NaN'
+NB: Haskell's 'signum' returns @signum NaN -> -1.0@ in
 GHC 7.8.3, but should be fixed in 7.10 -}
 copysign :: RealFloat a => a -> a -> a
 copysign x y
@@ -47,18 +63,18 @@ copysign x y
   | signum x == signum y = x
   | otherwise = -x
 
-
+-- | 'log' base 2
 log2 :: RealFloat a => a -> a
 log2 x = logBase 2 (abs x)
 
 {- | As Haskell's 'min' is not symmetric in its arguments in the
-presence of a NaN, define a specicic 'min'' -}
+presence of a NaN, define a specific 'min'' -}
 min' :: RealFloat a => a -> a -> a
 min' x y
   | isNaN x || isNaN y = 0 / 0
   | otherwise = min x y
 
-{- | 'qtrial' calculates the smaller root of 'p*x^2 - 2 q*x + r == 0', for
+{- | 'qtrial' calculates the smaller root of @p*x^2 - 2 q*x + r == 0@, for
 a given 'r', which determines 'p' and 'q' -}
 qtrial :: (RealFloat a, Show a) => a -> Either String (a, String)
 qtrial r
@@ -123,7 +139,7 @@ cdoubleQTest = qtestraw
 {- 'QuickCheck' testing
 Illustrates numerical instability, as need to ignore NaNs to pass -}
 
-{- | '~==' used for approximate equality, ignoring isNaN
+{- | '~==' is used for approximate equality, ignoring isNaN.
 TODO:: overload for tuples, reduce tolerace to 1e-15 for doubles -}
 infix 4 ~==
 (~==) :: RealFloat a => a -> a -> Bool
@@ -184,7 +200,8 @@ instance Arbitrary CDouble where
 
 
 -- Gather the QuickCheck unit tests
-
+-- | 'unittests' checks that the implemention of 'qdrtc' satisfies
+-- certain basic properties
 unittests = [
     testGroup "test1" [
       testProperty "Float" prop_test1f,
@@ -218,7 +235,7 @@ unittests = [
     ]
   ]
 
-
+-- | run the qtrial tests, followed by checking the properties of 'qdrtc'
 main :: IO ()
 main = do
 
