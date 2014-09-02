@@ -1,0 +1,10 @@
+This directory contains a copy of IBM's Test Suite for IEEE 754R Compliance and
+which is Copyright of IBM Corp. 2005.
+
+It was downloaded from https://www.research.ibm.com/cgi-bin/haifa/test_suite_download.pl?first=elenag&second=webmaster
+
+You should downloaded the latest version of the suite from there.
+
+A document describing the test suite can be found at http://www.haifa.il.ibm.com/projects/verification/fpgen/papers/ieee-test-suite-v2.pdf
+
+
