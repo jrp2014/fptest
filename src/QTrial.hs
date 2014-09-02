@@ -15,9 +15,9 @@ Berkeley CA 94720-1776
 
 http://www.eecs.berkeley.edu/~wkahan/ieee754status/IEEE754.PDF -}
 
-{- qdrtc computes the roots x1 and x2 of
-quadradic of the form p*x^2 - 2 q*x + r == 0
-as accuractely as they are determined by p, q, r -}
+{- | 'qdrtc' computes the roots 'x1' and 'x2' of
+quadradic of the form 'p*x^2 - 2 q*x + r == 0'
+as accuractely as they are determined by 'p', 'q', 'r' -}
 qdrtc :: RealFloat a => a -> a -> a -> (a, a)
 qdrtc p q r
   | ss == 0 = (r / p, r / p)
@@ -26,6 +26,7 @@ qdrtc p q r
     s = sqrt (q * q - p * r) -- NaN if sqrt (< 0)
     ss = q + copysign s q
 
+-- Specialisations pf 'qdrtc' for different floating point formats
 floatQdrtc :: Float -> Float -> Float -> (Float, Float)
 floatQdrtc = qdrtc
 doubleQdrtc :: Double -> Double -> Double -> (Double, Double)
@@ -36,9 +37,10 @@ cdoubleQdrtc :: CDouble -> CDouble -> CDouble -> (CDouble, CDouble)
 cdoubleQdrtc = qdrtc
 
 
-{- copysign(x, y) returns x with the sign of y.
-Hence, abs(x) = copysign( x, 1.0), even if x is NaN
-NB: Haskell's signum returns signum NaN -> -1.0 -}
+{- | 'copysign(x, y)' returns 'x' with the sign of 'y'.
+Hence, 'abs(x) = copysign( x, 1.0)', even if 'x' is 'NaN'
+NB: Haskell's 'signum' returns 'signum NaN -> -1.0' in
+GHC 7.8.3, but should be fixed in 7.10 -}
 copysign :: RealFloat a => a -> a -> a
 copysign x y
   | isNaN y = 0 / 0
@@ -49,12 +51,15 @@ copysign x y
 log2 :: RealFloat a => a -> a
 log2 x = logBase 2 (abs x)
 
--- Haskell's min is not symmetric in the presence of a NaN
+{- | As Haskell's 'min' is not symmetric in its arguments in the
+presence of a NaN, define a specicic 'min'' -}
 min' :: RealFloat a => a -> a -> a
 min' x y
   | isNaN x || isNaN y = 0 / 0
   | otherwise = min x y
 
+{- | 'qtrial' calculates the smaller root of 'p*x^2 - 2 q*x + r == 0', for
+a given 'r', which determines 'p' and 'q' -}
 qtrial :: (RealFloat a, Show a) => a -> Either String (a, String)
 qtrial r
   | p <= 0 = Left "qtrail expects r > 2"
@@ -74,7 +79,10 @@ qtrial r
     e1 = - log2 (x1 - 1.0) -- Could be NaN
     e2 = - log2 ((x2 - 1.0) - 2.0 / p)
 
--- Runs the trial against a series of different values of r
+{- | 'qtestraw' runs the 'qtrial' against a series of different values of 'r'.
+The later values will be too big for 32-bit arithmetic.
+The result is either a 'String' reporting an error,
+or a '(result, comment)' tuple -}
 qtestraw :: (RealFloat a, Show a) => [Either String (a, String)]
 qtestraw = map qtrial r
   where
@@ -95,15 +103,14 @@ qtestraw = map qtrial r
      2 ^ 32 + 2.0, -- 64 sig. bits.
      2 ^ 32 + 2.25] -- 64 sig. bits.
 
--- Generates a more readable interpretation of the raw results of a trail
+{- | 'qtest' generates a more readable rendering of the raw results of
+produced by 'qtrial' -}
 qtest :: (RealFloat a, Show a) => [Either String (a, String)] -> String
 qtest raw = unlines (map (either id snd) raw) ++
     "Worst accuracy is " ++
     show (minimum (map fst (rights raw))) ++ " sig. bits"
 
-
-{- QuickCheck testing
-Illustrates numerical instability, as need to ignore NaNs to pass -}
+-- Specialisations of 'qtestraw' for different floating point formats
 floatQTest :: [Either String (Float, String)]
 floatQTest = qtestraw
 doubleQTest :: [Either String (Double, String)]
@@ -113,7 +120,10 @@ cfloatQTest = qtestraw
 cdoubleQTest :: [Either String (CDouble, String)]
 cdoubleQTest = qtestraw
 
-{- Approximately equal, ignoring isNaN
+{- 'QuickCheck' testing
+Illustrates numerical instability, as need to ignore NaNs to pass -}
+
+{- | '~==' used for approximate equality, ignoring isNaN
 TODO:: overload for tuples, reduce tolerace to 1e-15 for doubles -}
 infix 4 ~==
 (~==) :: RealFloat a => a -> a -> Bool
@@ -122,7 +132,7 @@ x ~== y
   | otherwise = abs (x - y) < 1.0e-6 * abs x
 
 
--- These test the properties of qdrtc given in the paper
+-- The following test the invariant properties of 'qdrtc' given in the paper
 
 test1 f p = p /= 0 ==> f p 0 0 == (0, 0)
 prop_test1f = test1 floatQdrtc
