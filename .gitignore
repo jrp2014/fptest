@@ -1,2 +1,5 @@
 *.swp
 junk
+.cabal-sandbox
+cabal.sandbox.config
+dist

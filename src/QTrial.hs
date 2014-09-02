@@ -1,4 +1,4 @@
-module QTrial where
+module Main(main) where
 
 import Data.Either
 import Test.QuickCheck

@@ -7,7 +7,7 @@ There are two sets of tests so far:
 ##QTrial##
 **QTrial** is the floating point benchmark described in *IEEE Standard 754 for Binary Floating-Point Arithmetic* by Prof. W. Kahan [Download link](http://www.eecs.berkeley.edu/~wkahan/ieee754status/IEEE754.PDF)
 
-You should just be able to 'runhaskell QTrial.hs'.
+You should just be able to `runhaskell QTrial.hs` from `src`.
 
 An extract from the result is:
 
@@ -60,9 +60,9 @@ Worst accuracy is 26.499999986733027 sig. bits
 This is done in two ways:
 
 * By interpreting the tests
-* By translating the tests into a Haskell Hnit test suite script that can just be run using runghc
+* By translating the tests into a Haskell HUnit test suite script that can just be run using `runhaskell`
 
-The IBM tests are contained in the `test_suite` directory, but you will want to get the latest version from the link above.
+The IBM test vectors are contained in the `test_suite` directory, but you will want to get the latest version from the link above.
 
 You will, most likely, want the binary tests unless you have a decimal machine.  Only 32-bit float tests are provided (not 64-bit double ones).
 
