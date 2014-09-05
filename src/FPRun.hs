@@ -23,7 +23,7 @@ module FPRun where
 import FPTypes
 import FPParse
 
-import Control.Monad (liftM)
+import Control.Monad (msum)
 import Data.Char (toUpper)
 import Data.Either (rights)
 import Data.Fixed (divMod')
@@ -384,15 +384,16 @@ them directly (interprets them).
 TODO:: find a cleaner way of doing this without using do, etc
 -}
 evalTestFiles :: [FilePath] -> IO String
-evalTestFiles filenames = do
-  results <- mapM evalTestFile filenames
-  return $ concat results
+evalTestFiles = msum . map evalTestFile
+
+{- results <- mapM evalTestFile filenames
+return $ concat results -}
 
 -- | 'evalTestFile evaluate the test cases in the given file
 evalTestFile :: FilePath -> IO String
 evalTestFile filename = do
     parsedTestCases <- parseFromFile testCaseFile filename
-    return $ "Running file " ++ filename ++ "\n:" ++
+    return $ "Running file " ++ filename ++ ":\n" ++
         case parsedTestCases of
           Left err -> show err ++ "\nTest case file " ++ filename ++ " failed to parse"
           Right result -> unlines (map checkResult result)
@@ -403,11 +404,12 @@ translateTestFiles :: [FilePath] -> IO String
 translateTestFiles filenames = do
   results <- mapM translateTestFile filenames
   return $ preface ++
-    "\ntests = testsuite ~:i [\n" ++
+    "\ntests = \"fptest\" ~: [\n  " ++
       concat results ++
       "  ]\n"
 
-
+{- | 'translateTestFile' translates a files of IBM test cases into an
+HUnit test group -}
 translateTestFile :: FilePath -> IO String
 translateTestFile filename = do
   parsedTestCases <- parseFromFile testCaseFile filename
@@ -424,8 +426,8 @@ translateTestFile filename = do
 {- | 'preface' outputs some boilerplate code for placing at the head of
 of a file of test case translations in Haskell (HUnit) format -}
 preface :: String
-preface = concat [
-  "module FPTestTest where\n\n",
+preface = unlines [
+  "module Main where\n\n",
   "import Test.HUnit\n",
   "type D = Double",
   "type F = Float\n",

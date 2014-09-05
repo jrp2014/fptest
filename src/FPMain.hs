@@ -120,15 +120,15 @@ main = do
             rather than running the last one given -}
         opts <- foldl (>>=) (return defaultOptions) actions
 
-	-- Pull out the action and output action
-	let Options { optAction = action,
+        -- Pull out the action and output action
+        let Options { optAction = action,
         optOutputToFile = output } = opts
 
-	{- feed the results of applying the action to the
+        {- feed the results of applying the action to the
            scripts to output -}
-	action scripts >>= output
+        action scripts >>= output
 
-	exitSuccess
+        exitSuccess
 
     (_, _, errs) -> do
       u <- usage
