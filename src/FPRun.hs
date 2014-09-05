@@ -23,6 +23,7 @@ module FPRun where
 import FPTypes
 import FPParse
 
+import Control.Monad (liftM)
 import Data.Char (toUpper)
 import Data.Either (rights)
 import Data.Fixed (divMod')
@@ -377,47 +378,53 @@ boolNum False = 0.0
 = Running the test cases in a list of IBM floating point test specification files -}
 
 
-{- | 'evalTests' takes a list of IBM test case files (.fptest) and executes
-them directly (interprets them), printing the results -}
-evalTests :: [FilePath] -> IO ()
-evalTests = mapM_ evalTestCases
-  where
-    evalTestCases :: String -> IO ()
-    evalTestCases fileName = do
-      result <- parseFromFile testCaseFile fileName
-      putStrLn fileName
-      case result of
-        Left err -> do
-                      print err
-                      error "Test case file failed to parse"
-        -- Right xs -> mapM_ print (map checkResult xs)
-        Right xs -> putStrLn $ unlines (map checkResult xs)
+{- | 'evalTestFiles' takes a list of IBM test case files (.fptest) and executes
+them directly (interprets them).
 
-{- | 'translateTests' takes a list of IBM test cases and translates their contents
+TODO:: find a cleaner way of doing this without using do, etc
+-}
+evalTestFiles :: [FilePath] -> IO String
+evalTestFiles filenames = do
+  results <- mapM evalTestFile filenames
+  return $ concat results
+
+-- | 'evalTestFile evaluate the test cases in the given file
+evalTestFile :: FilePath -> IO String
+evalTestFile filename = do
+    parsedTestCases <- parseFromFile testCaseFile filename
+    return $ "Running file " ++ filename ++ "\n:" ++
+        case parsedTestCases of
+          Left err -> show err ++ "\nTest case file " ++ filename ++ " failed to parse"
+          Right result -> unlines (map checkResult result)
+
+{- | 'translateTestFiles' takes a list of IBM test cases and translates their contents
 into a set of Haskell (HUnit) tests that can be run separately. -}
-translateTests :: [FilePath] -> IO ()
-translateTests = mapM_ translateTestCases
-  where
-    translateTestCases :: FilePath -> IO ()
-    translateTestCases fileName = do
-      result <- parseFromFile testCaseFile fileName
-      case result of
-        Left err -> do  -- unsuccessful parse
-                      print err
-                      error "Test case file failed to parse"
-        Right xs -> do  -- successful parse
-          preface
-          putStr $ "tests = " ++ show fileName ++ " ~: [\n  "
-          {- Take only the rights, ignoring the lefts, which contain error messages,
-          indicating that a test is unimplemented, eg. -}
-          putStr $ intercalate ",\n  " (rights (map translateResult xs))
-          putStrLn "]"
+translateTestFiles :: [FilePath] -> IO String
+translateTestFiles filenames = do
+  results <- mapM translateTestFile filenames
+  return $ preface ++
+    "\ntests = testsuite ~:i [\n" ++
+      concat results ++
+      "  ]\n"
+
+
+translateTestFile :: FilePath -> IO String
+translateTestFile filename = do
+  parsedTestCases <- parseFromFile testCaseFile filename
+  return $ case parsedTestCases of
+    Left err -> -- unsuccessful parse
+                show err ++ "\nTest case file " ++ filename ++ " failed to parse"
+    Right results ->  -- successful parse
+      show filename ++ " ~: [\n  " ++
+      {- Take only the rights, ignoring the lefts, which contain error messages,
+      indicating that a test is unimplemented, eg. -}
+        intercalate ",\n  " (rights (map translateResult results)) ++ "]"
 
 
 {- | 'preface' outputs some boilerplate code for placing at the head of
 of a file of test case translations in Haskell (HUnit) format -}
-preface :: IO ()
-preface = mapM_ putStrLn [
+preface :: String
+preface = concat [
   "module FPTestTest where\n\n",
   "import Test.HUnit\n",
   "type D = Double",
@@ -452,4 +459,4 @@ preface = mapM_ putStrLn [
 
   "main :: IO Counts",
   "main = runTestTT tests"
-    ]
+  ]
