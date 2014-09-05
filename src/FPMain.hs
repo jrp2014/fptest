@@ -41,26 +41,25 @@ for handling floating point exceptions, rounding mode, etc
 -}
 
 
-data Action = Evaluate | Translate FilePath
-
 data Options = Options {
     optAction :: [FilePath] -> IO String,
     optOutputToFile :: String -> IO ()
   }
 
-
+-- | Default command line option
 defaultOptions :: Options
 defaultOptions = Options {
     optAction = evalTestFiles,
     optOutputToFile = putStr
   }
 
+-- | List of possible command line options
 options :: [OptDescr (Options -> IO Options)]
 options = [
   Option "e" ["evaluate"]
     (NoArg
       (\ opt -> return opt { optAction = evalTestFiles }))
-    "Evaluate test script file",
+    "Evaluate test script file (default)",
 
   Option "t" ["translate"]
     (NoArg
@@ -82,11 +81,11 @@ options = [
     "Show help"
   ]
 
-
+-- | Return 'usage' string
 usage :: IO String
 usage = do
   prg <- getProgName
-  return $ "Usage: " ++ usageInfo prg options
+  return $ "Usage: " ++ usageInfo (prg ++ " [OPTIONS] SCRIPT...") options
 
 {- parseArgs :: IO Options
 parseArgs = do
@@ -99,7 +98,7 @@ case getOpt RequireOrder (options helpMessage) argv of
 (_, _, errs) -> ioError (userError (concat errs ++ helpMessage))
  -}
 
-
+-- | 'main'
 main :: IO ()
 main = do
   {- quickCheck (prop_FloatHex :: Float -> Bool)
@@ -109,30 +108,33 @@ main = do
   -- Read the arguments
   args <- getArgs
 
-  case getOpt RequireOrder options args of
-    (actions, scripts, []) -> do {- should check that there is only one action,
-                                 rather than running the last one -}
-                                opts <- foldl (>>=) (return defaultOptions) actions
-
-                                -- Pull out the action and output action
-                                let Options { optAction = action,
-                                  optOutputToFile = output } = opts
-
-                                {- feed the results of applying the action to the
-                                scripts to output -}
-                                action scripts >>= output
-
-                                exitSuccess
+  case getOpt Permute options args of
 
     (_, [], _) -> do
-                      hPutStrLn stderr "At least one test script argument required"
-                      exitFailure
+      u <- usage
+      hPutStrLn stderr ("At least one test script required\n" ++ u)
+      exitFailure
+
+    (actions, scripts, []) ->
+      do {- Should check that there is only one action,
+            rather than running the last one given -}
+        opts <- foldl (>>=) (return defaultOptions) actions
+
+	-- Pull out the action and output action
+	let Options { optAction = action,
+        optOutputToFile = output } = opts
+
+	{- feed the results of applying the action to the
+           scripts to output -}
+	action scripts >>= output
+
+	exitSuccess
 
     (_, _, errs) -> do
-                      u <- usage
-                      hPutStrLn stderr (concat errs ++ u)
+      u <- usage
+      hPutStrLn stderr (concat errs ++ u)
 
-                      exitFailure
+      exitFailure
 
 
 testFiles :: [FilePath]
