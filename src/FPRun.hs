@@ -386,9 +386,6 @@ TODO:: find a cleaner way of doing this without using do, etc
 evalTestFiles :: [FilePath] -> IO String
 evalTestFiles = msum . map evalTestFile
 
-{- results <- mapM evalTestFile filenames
-return $ concat results -}
-
 -- | 'evalTestFile evaluate the test cases in the given file
 evalTestFile :: FilePath -> IO String
 evalTestFile filename = do
