@@ -19,7 +19,7 @@ Syntax of the Test Cases>
 
 module FPTypes where
 
-import Data.List (intercalate)
+import           Data.List (intercalate)
 
 -- |
 -- = Test case specification rendering
@@ -52,13 +52,13 @@ instance Display Char where
 
 -- | 'TestCase' provides a test case specification
 data TestCase operandType = TestCase {
-  format :: Format,
-  operation :: Operation,
-  roundingMode :: RoundingMode,
+  format            :: Format,
+  operation         :: Operation,
+  roundingMode      :: RoundingMode,
   trappedExceptions :: [TrappedException],
-  inputs :: [operandType],
-  output :: operandType,
-  outputExceptions :: [Exception]
+  inputs            :: [operandType],
+  output            :: operandType,
+  outputExceptions  :: [Exception]
   } deriving (Show)
 
 {- | 'ParsedTestCase' retains the operands and expected output as

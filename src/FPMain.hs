@@ -18,12 +18,12 @@ Syntax of the Test Cases>
 -}
 module Main where
 
-import FPRun
+import           FPRun
 
-import System.Console.GetOpt
-import System.Environment (getArgs, getProgName)
-import System.Exit
-import System.IO
+import           System.Console.GetOpt
+import           System.Environment    (getArgs, getProgName)
+import           System.Exit
+import           System.IO
 
 {-
 
@@ -42,7 +42,7 @@ for handling floating point exceptions, rounding mode, etc
 
 
 data Options = Options {
-    optAction :: [FilePath] -> IO String,
+    optAction       :: [FilePath] -> IO String,
     optOutputToFile :: String -> IO ()
   }
 

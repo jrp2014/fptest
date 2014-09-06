@@ -19,9 +19,9 @@ Syntax of the Test Cases>
 
 module FPParse where
 
-import FPTypes
+import           FPTypes
 
-import Text.ParserCombinators.Parsec
+import           Text.ParserCombinators.Parsec
 
 -- |
 -- = Test case specification parsing
@@ -260,7 +260,7 @@ reresentation of the value -}
 boolean :: GenParser Char st String
 boolean =
   (try (string "0x0") >> return "+Zero") <|>
-  (string "0x1" >> return "1.P+0")
+  (string "0x1" >> return "+1.000000P+0")
 
 returnClass :: GenParser Char st String
 returnClass =
@@ -301,7 +301,7 @@ parseTestCaseFile = parse testCaseFile "parseTestCaseFile"
 
 
 -- | 'parseTests' takes a list of test case specification file names
--- and prints a list of file name and parsed test cases list 
+-- and prints a list of file name and parsed test cases list
 parseTests :: [FilePath] -> IO ()
 parseTests = mapM_ parseTestCases
   where

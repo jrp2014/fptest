@@ -20,18 +20,18 @@ Syntax of the Test Cases>
 
 module FPRun where
 
-import FPTypes
 import FPParse
+import FPTypes
 
 import Control.Monad (msum)
 import Data.Char (toUpper)
 import Data.Either (rights)
 import Data.Fixed (divMod')
 import Data.List (intercalate)
-import Data.Word (Word64, Word32)
+import Data.Word (Word32, Word64)
 import Numeric (floatToDigits, showHex)
+import Text.Parsec.Number (hexFloat, sign)
 import Text.ParserCombinators.Parsec
-import Text.Parsec.Number (sign, hexFloat)
 import Unsafe.Coerce (unsafeCoerce)
 
 {- |
@@ -220,7 +220,7 @@ checkResult :: ParsedTestCase -> String
 checkResult t@TestCase { format = f,
   output = o,
   outputExceptions = oe
-  } = display t ++ ": " ++
+  } = display t ++ ":" ++
     case f of
       BasicFormat Binary32 ->
         checkResult' ( execute t :: Output Float )
@@ -234,7 +234,7 @@ checkResult t@TestCase { format = f,
           Right result -- compare result with expectation
             | o == "#" -> "No output expected: " ++ show result
             | floatToHex result == o -> "Success!"
-            | otherwise -> floatToHex result ++ " (" ++ show result ++ ") /= " ++ display o
+            | otherwise -> " got " ++ floatToHex result 
 
 
 -- 'translateResult' turns a 'ParsedTestCase' into an HUnit test or a diagnostic String
@@ -262,9 +262,7 @@ strcmp s1 s2 = case (s1, s2) of
   _ -> False
 
 
-{- |
-== Helper functions for hex floating point format literals.
-TODO:: This does not yet work with IBM's hex floating point literal format -}
+-- | == Helper functions for hex floating point format literals.
 
 -- | 'hexToFloat' parses a string into a 'RealFloat'.
 hexToFloat :: (RealFloat a, HasNaN a) => String -> a
@@ -277,60 +275,87 @@ hexToFloat s
   | s == "S" = signallingNaN
   | s == "true" = 1.0
   | s == "false" = 0.0
-  | otherwise =
-      case parse hexToFloat' "hexToFloat" s of
-        Left err -> error ("Invalid hex format floating point number '" ++ s ++ "' :" ++ show err)
-        Right f -> f
-      where
-        hexToFloat' :: RealFloat a => GenParser Char st a
-        hexToFloat' = do
-          sn <- sign
-          h <- hexFloat False
-          eof
-          return $ sn $ case h of
-              Left i -> fromInteger i
-              Right f -> f
+  | otherwise = hexToFloat' s
 
 
-{- | 'floatToHex' takes a 'RealFloat' and produces a hex literal string
- - This uses <http://en.wikipedia.org/wiki/Single-precision_floating-point_formati
- - Converting from decimal representation to binary32 format>
- - TODO:: handle denormalized case
-TODO:: refactor this in terms of encodeFloat, signCharificand, etc ? -}
-floatToHex :: (RealFloat a, Show a, HasNaN a) => a -> String
+{- | Converts 'RealFloat' to a hex literal string.  This version right-justifies the
+significand, following IBM's test suite convention.  This means that, for Floats,
+which use 23-bits, the hex representation is different from the standard notation
+because the last bit of the significand is padded to zero, rather than the first bit. -}
+floatToHex :: (RealFloat a, Show a) => a -> String
 floatToHex x
+  | not (isIEEE x) = "Not an IEEE floating point number: " ++ show x
+{- | expnt == eMax + 1 && explicitBits == [] && x > 0 = "+Inf"
+expnt == eMax + 1 && explicitBits == [] && x < 0 = "-Inf" -}
   | isNaN x = "Q" -- Haskell seems to use only quiet NaNs
   | isInfinite x && x > 0 = "+Inf"
   | isInfinite x = "-Inf"
   | isNegativeZero x = "-Zero"
   | x == 0.0 = "+Zero"
--- | isDenormalized x = "Denormalized"
-  | not (isIEEE x) = "Not an IEEE floating point number: " ++ show x
-  | x < 0 = '-' : binaryDigitsToString (floatToDigits 2 (-x))
-  | otherwise = binaryDigitsToString (floatToDigits 2 x)
+  | x > 0 = '+' : floatToHex' x
+  | x < 0 = '-' : floatToHex' (-x)
+  | otherwise = error "Invalid argument to floatToHex : " ++ show x
     where
-      binaryDigitsToString :: ([Int], Int) -> String
-      binaryDigitsToString (1 : normalizedBinaryFraction, n ) = "1." ++
-        normalizedBinaryFractionToString (normalizedBinaryFraction, n - 1)
-      binaryDigitsToString ([0], _ ) = "Zero"
-      binaryDigitsToString ( 0 : denormalizedBinaryFraction, _) = "Denormalized"
-      binaryDigitsToString _ = error "binaryDigitsToString"
+      floatToHex' y
+        | expnt > eMax + 1 = "Exponent (" ++ show expnt ++ ") > " ++ show eMax
 
-      normalizedBinaryFractionToString :: ([Int], Int) -> String
-      normalizedBinaryFractionToString (nbf, n) =
-        binaryToHex nbf ++ "P" ++ exponentSign n ++ show n
-          where
-            exponentSign s -- add a + sign for +ve exponents
-              | s < 0 = ""
-              | otherwise = "+"
+        {- For the subnormal case, since the padding is on the left hand side,
+        the exponent needs to be adjusted -}
+        | expnt <= eMin = "0." ++ bitsToHex f' ++
+            "P" ++ exponentSign (expnt + (eMin - expnt)) ++
+            show (expnt + (eMin - expnt)) -- Denormalized case
 
-      binaryToHex :: [Int] -> String
-      binaryToHex (a : b : c : d : es) =
-        showHex (8 * a + 4 * b + 2 * c + d) (binaryToHex es)
-      binaryToHex [a, b, c] = showHex (8 * a + 4 * b + 2 * c) ""
-      binaryToHex [a, b] = showHex (8 * a + 4 * b) ""
-      binaryToHex [a] = showHex (8 * a) ""
-      binaryToHex [] = ""
+        | otherwise = "1." ++ bitsToHex f ++ "P" ++
+            exponentSign (expnt - 1) ++ show (expnt - 1)
+
+        where
+          (implicitBit : explicitBits, expnt) = floatToDigits 2 y
+
+          -- Normal case drops the implicit bit
+          f = explicitBits ++ zeroPadding (paddedDigits - length explicitBits)
+
+          {- Subnormal case retains the implicit bit
+          Conventionally literals are padded LEFT justified.
+          The IBM test suite right justifies them so we need to add more initial
+          padding -}
+          f' = zeroPadding (eMin - expnt + 1) ++
+           (implicitBit : (explicitBits ++
+            zeroPadding (paddedDigits - (eMin - expnt + 1 + 1 + length explicitBits))))
+
+          {- Conventionally literals are padded LEFT justified.
+          Normal case drops the implicit bit
+          f = explicitBits ++ zeroPadding (paddedDigits - length explicitBits)
+          Subnormal case retains the implicit bit
+          f' = zeroPadding (eMin - expnt) ++
+          (implicitBit : (explicitBits ++
+          zeroPadding (paddedDigits - (eMin - expnt + 1 + length explicitBits)))) -}
+
+          zeroPadding n = replicate n 0
+
+          {- | 'floatRange' returns (-125, 128) for Float and (-1021,2014)
+          for Double which is 1 more than the conventional (eMin, eMax) -}
+          eMax = e - 1
+            where
+               (_, e) = floatRange y
+          eMin = 1 - eMax -- ^ 'eMin' is required to be 1 - 'eMax' by IEEE754
+
+          digits = floatDigits y
+          explicitDigits = digits - 1
+          {- Always pad to full precision, in IBM representation; the standard drops
+          trailing 0s -}
+          paddedDigits
+            | explicitDigits `rem` 4 == 0 = explicitDigits
+            | otherwise = ((explicitDigits `div` 4) + 1) * 4
+
+          bitsToHex (a : b : c : d : es) = map toUpper
+            (showHex (8 * a + 4 * b + 2 * c + d) (bitsToHex es) )
+          bitsToHex [] = ""
+          bitsToHex invalid = error "bitsToHex failure : " ++ show invalid
+
+          exponentSign s -- add a + sign for +ve exponents
+            | s < 0 = ""
+            | otherwise = "+"
+
 
 -- | == Checks
 
@@ -358,6 +383,21 @@ At present, although the values can be set, Haskell doesn't generate signalling 
 class (RealFloat a, Show a) => HasNaN a where
     signallingNaN :: a
     quietNaN :: a
+    hexToFloat' :: String -> a
+    hexToFloat' s =
+        case parse hexToFloatParser "hexToFloat" s of
+          Left err -> error ("Invalid hex format floating point number '" ++ s ++ "' :" ++ show err)
+          Right f -> f
+
+hexToFloatParser :: RealFloat a => GenParser Char st a
+hexToFloatParser = do
+      sn <- sign
+      h <- hexFloat False
+      eof
+      return $ sn $ case h of
+          Left i -> fromInteger i
+          Right f -> f
+
 
 instance HasNaN Double where
     signallingNaN = unsafeCoerce (0x7ff4000000000000 :: Word64)
@@ -366,6 +406,20 @@ instance HasNaN Double where
 instance HasNaN Float where
     signallingNaN = unsafeCoerce (0x7fa00000 :: Word32)
     quietNaN = unsafeCoerce (0x7fc00000 :: Word32)
+
+    {- This IBM subnormal are half what the hex floating point literal would be for
+    floating point subnormals -}
+    hexToFloat' s
+      -- 2**(-127) is the largest denormalised float
+      | abs d <= 2 ** (-127) = realToFrac $ scaleFloat 1 d  -- multiply by 2
+      | otherwise =
+          case parse hexToFloatParser "hexToFloat" s of
+            Left err -> error ("Invalid hex format floating point number '" ++ s ++ "' :" ++ show err)
+            Right f -> f
+      where
+        d = (case parse hexToFloatParser "hexToFloat" s of
+          Left err -> error ("Invalid hex format floating point number '" ++ s ++ "' :" ++ show err)
+          Right f -> f) :: Double
 
 
 -- | 'boolNum' is a helper function that simply translates True / False to 1.0/0.0
