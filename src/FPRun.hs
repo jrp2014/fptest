@@ -30,6 +30,7 @@ import Data.Fixed (divMod')
 import Data.List (intercalate)
 import Data.Word (Word32, Word64)
 import Numeric (floatToDigits, showHex)
+import qualified Test.QuickCheck as Q
 import Text.Parsec.Number (hexFloat, sign)
 import Text.ParserCombinators.Parsec
 import Unsafe.Coerce (unsafeCoerce)
@@ -363,12 +364,24 @@ expnt == eMax + 1 && explicitBits == [] && x < 0 = "-Inf" -}
 prop_FloatHex :: (RealFloat a, HasNaN a, Show a) => a -> Bool
 prop_FloatHex f = hexToFloat (floatToHex f) == f
 
+
+prop_test1f :: Float -> Bool
+prop_test1f = prop_FloatHex
+prop_test1d :: Double -> Bool
+prop_test1d = prop_FloatHex
+
+rf, rd :: IO()
+rf = Q.quickCheckWith Q.stdArgs {Q.maxSuccess = 5000} prop_test1f
+rd = Q.quickCheckWith Q.stdArgs {Q.maxSuccess = 5000} prop_test1d
+
+
 -- | 'check2' parse and check a couple of test cases
-check2 :: String
-check2 =
-  case parse testCaseSpec "" "b32?i =0 +1.000000P0 -> 0x0\nb32+ =0 i +0.000001P-126 +1.000000P-126 -> +1.000001P-126" of
-  Left err -> show err
-  Right t -> checkResult t
+check2 :: IO ()
+check2 = putStrLn $ unlines $
+  case parse (endBy1 testCaseSpec eol) ""
+    "b32?i =0 +1.000000P0 -> 0x0\r\nb32+ =0 i +0.000001P-126 +1.000000P-126 -> +1.000002P-126\r\nb32V =0 -1.7FFFFFP127 -> Q i" of
+  Left err -> [show err]
+  Right t -> fmap checkResult t
 
 {- |
 = Helper functions -}
