@@ -30,7 +30,6 @@ import Data.Fixed (divMod')
 import Data.List (intercalate)
 import Data.Word (Word32, Word64)
 import Numeric (floatToDigits, showHex)
-import qualified Test.QuickCheck as Q
 import Text.Parsec.Number (hexFloat, sign)
 import Text.ParserCombinators.Parsec
 import Unsafe.Coerce (unsafeCoerce)
@@ -283,6 +282,7 @@ hexToFloat s
 significand, following IBM's test suite convention.  This means that, for Floats,
 which use 23-bits, the hex representation is different from the standard notation
 because the last bit of the significand is padded to zero, rather than the first bit. -}
+
 floatToHex :: (RealFloat a, Show a) => a -> String
 floatToHex x
   | not (isIEEE x) = "Not an IEEE floating point number: " ++ show x
@@ -310,18 +310,25 @@ expnt == eMax + 1 && explicitBits == [] && x < 0 = "-Inf" -}
             exponentSign (expnt - 1) ++ show (expnt - 1)
 
         where
+	  -- Translate y into a list of bits; expnt is set so that the first
+	  -- bit is one (will fail if y is 0)
           (implicitBit : explicitBits, expnt) = floatToDigits 2 y
 
           -- Normal case drops the implicit bit
-          f = explicitBits ++ zeroPadding (paddedDigits - length explicitBits)
+	  -- Pad out with an initial bit / Float, not needed for Double, the explicit
+	  -- bits follow, and 
+          f = zeroPadding (paddedDigits - explicitDigits) ++
+	      explicitBits ++
+	      zeroPadding (paddedDigits - (paddedDigits - explicitDigits + length explicitBits))
 
           {- Subnormal case retains the implicit bit
           Conventionally literals are padded LEFT justified.
           The IBM test suite right justifies them so we need to add more initial
           padding -}
+
           f' = zeroPadding (eMin - expnt + 1) ++
            (implicitBit : (explicitBits ++
-            zeroPadding (paddedDigits - (eMin - expnt + 1 + 1 + length explicitBits))))
+           zeroPadding (paddedDigits - (eMin - expnt + 1 + 1 + length explicitBits))))
 
           {- Conventionally literals are padded LEFT justified.
           Normal case drops the implicit bit
@@ -333,55 +340,38 @@ expnt == eMax + 1 && explicitBits == [] && x < 0 = "-Inf" -}
 
           zeroPadding n = replicate n 0
 
-          {- | 'floatRange' returns (-125, 128) for Float and (-1021,2014)
-          for Double which is 1 more than the conventional (eMin, eMax) -}
-          eMax = e - 1
+          {- | 'floatRange' returns (-125, 128) for Float and (-1021,1024)
+          for Double, which is one more than the conventional (eMin, eMax) -}
+          eMax = e - 1 -- 127 Float / 2013 Double
             where
                (_, e) = floatRange y
-          eMin = 1 - eMax -- ^ 'eMin' is required to be 1 - 'eMax' by IEEE754
+          eMin = 1 - eMax -- eMin is required to be 1 - 'eMax' by IEEE754,
+	                  -- -126 Float / -1023 Double
 
-          digits = floatDigits y
-          explicitDigits = digits - 1
-          {- Always pad to full precision, in IBM representation; the standard drops
+          digits = floatDigits y      -- 24 Float / 53 Double
+          explicitDigits = digits - 1 -- 23 Float / 52 Double
+          {- Always pad to full precision in IBM representation; the standard drops
           trailing 0s -}
-          paddedDigits
+          paddedDigits -- 24 Float / 52 Double
             | explicitDigits `rem` 4 == 0 = explicitDigits
             | otherwise = ((explicitDigits `div` 4) + 1) * 4
 
-          bitsToHex (a : b : c : d : es) = map toUpper
-            (showHex (8 * a + 4 * b + 2 * c + d) (bitsToHex es) )
-          bitsToHex [] = ""
-          bitsToHex invalid = error "bitsToHex failure : " ++ show invalid
+          -- Right justified version
+	  bitsToHex :: [Int] -> String
+          bitsToHex s = map toUpper (bitsToHex' s)
+	    where
+              bitsToHex' (a : b : c : d : es) =
+	        showHex (8 * a + 4 * b + 2 * c + d) (bitsToHex' es)
+              bitsToHex' [a, b, c] = showHex (4 * a + 2 * b + c ) ""
+              bitsToHex' [a, b] = showHex (2 * a + b ) ""
+              bitsToHex' [a] = showHex a ""
+              bitsToHex' [] = ""
+	      --bitsToHex' e = error $ show e ++ " is (part of) an invalid argument to bitsToHex"
 
           exponentSign s -- add a + sign for +ve exponents
             | s < 0 = ""
             | otherwise = "+"
 
-
--- | == Checks
-
--- | QuickCheck test
-prop_FloatHex :: (RealFloat a, HasNaN a, Show a) => a -> Bool
-prop_FloatHex f = hexToFloat (floatToHex f) == f
-
-
-prop_test1f :: Float -> Bool
-prop_test1f = prop_FloatHex
-prop_test1d :: Double -> Bool
-prop_test1d = prop_FloatHex
-
-rf, rd :: IO()
-rf = Q.quickCheckWith Q.stdArgs {Q.maxSuccess = 5000} prop_test1f
-rd = Q.quickCheckWith Q.stdArgs {Q.maxSuccess = 5000} prop_test1d
-
-
--- | 'check2' parse and check a couple of test cases
-check2 :: IO ()
-check2 = putStrLn $ unlines $
-  case parse (endBy1 testCaseSpec eol) ""
-    "b32?i =0 +1.000000P0 -> 0x0\r\nb32+ =0 i +0.000001P-126 +1.000000P-126 -> +1.000002P-126\r\nb32V =0 -1.7FFFFFP127 -> Q i" of
-  Left err -> [show err]
-  Right t -> fmap checkResult t
 
 {- |
 = Helper functions -}
@@ -425,11 +415,18 @@ instance HasNaN Float where
     hexToFloat' s
       -- 2**(-127) is the largest denormalised float
       | abs d <= 2 ** (-127) = realToFrac $ scaleFloat 1 d  -- multiply by 2
-      | otherwise =
-          case parse hexToFloatParser "hexToFloat" s of
-            Left err -> error ("Invalid hex format floating point number '" ++ s ++ "' :" ++ show err)
-            Right f -> f
+        -- multiply the fractional part by 2 because IBM format is right aligned
+      | otherwise = signum (realToFrac d) *
+           scaleFloat expnt (val (1 : tail (explicitBits ++ zeroPadding 24)))
       where
+        (_: explicitBits, expnt) = floatToDigits 2 (abs d)
+
+	val :: [Int] -> Float
+        val (h:t) = (fromIntegral h + val t) / 2
+        val [] = 0
+
+        zeroPadding n = replicate n 0
+
         d = (case parse hexToFloatParser "hexToFloat" s of
           Left err -> error ("Invalid hex format floating point number '" ++ s ++ "' :" ++ show err)
           Right f -> f) :: Double
