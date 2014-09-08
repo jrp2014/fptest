@@ -234,7 +234,7 @@ checkResult t@TestCase { format = f,
           Right result -- compare result with expectation
             | o == "#" -> "No output expected: " ++ show result
             | floatToHex result == o -> "Success!"
-            | otherwise -> " got " ++ floatToHex result 
+            | otherwise -> " got " ++ floatToHex result
 
 
 -- 'translateResult' turns a 'ParsedTestCase' into an HUnit test or a diagnostic String
@@ -310,16 +310,16 @@ expnt == eMax + 1 && explicitBits == [] && x < 0 = "-Inf" -}
             exponentSign (expnt - 1) ++ show (expnt - 1)
 
         where
-	  -- Translate y into a list of bits; expnt is set so that the first
-	  -- bit is one (will fail if y is 0)
+          {- Translate y into a list of bits; expnt is set so that the first
+          bit is one (will fail if y is 0) -}
           (implicitBit : explicitBits, expnt) = floatToDigits 2 y
 
-          -- Normal case drops the implicit bit
-	  -- Pad out with an initial bit / Float, not needed for Double, the explicit
-	  -- bits follow, and 
+          {- Normal case drops the implicit bit
+          Pad out with an initial bit / Float, not needed for Double, the explicit
+          bits follow, and -}
           f = zeroPadding (paddedDigits - explicitDigits) ++
-	      explicitBits ++
-	      zeroPadding (paddedDigits - (paddedDigits - explicitDigits + length explicitBits))
+              explicitBits ++
+              zeroPadding (paddedDigits - (paddedDigits - explicitDigits + length explicitBits))
 
           {- Subnormal case retains the implicit bit
           Conventionally literals are padded LEFT justified.
@@ -345,28 +345,28 @@ expnt == eMax + 1 && explicitBits == [] && x < 0 = "-Inf" -}
           eMax = e - 1 -- 127 Float / 2013 Double
             where
                (_, e) = floatRange y
-          eMin = 1 - eMax -- eMin is required to be 1 - 'eMax' by IEEE754,
-	                  -- -126 Float / -1023 Double
+          eMin = 1 - eMax {- eMin is required to be 1 - 'eMax' by IEEE754,
+                          -126 Float / -1023 Double -}
 
           digits = floatDigits y      -- 24 Float / 53 Double
-          explicitDigits = digits - 1 -- 23 Float / 52 Double
-          {- Always pad to full precision in IBM representation; the standard drops
+          explicitDigits = digits - 1 {- 23 Float / 52 Double
+          Always pad to full precision in IBM representation; the standard drops
           trailing 0s -}
           paddedDigits -- 24 Float / 52 Double
             | explicitDigits `rem` 4 == 0 = explicitDigits
             | otherwise = ((explicitDigits `div` 4) + 1) * 4
 
           -- Right justified version
-	  bitsToHex :: [Int] -> String
+          bitsToHex :: [Int] -> String
           bitsToHex s = map toUpper (bitsToHex' s)
-	    where
+            where
               bitsToHex' (a : b : c : d : es) =
-	        showHex (8 * a + 4 * b + 2 * c + d) (bitsToHex' es)
+                showHex (8 * a + 4 * b + 2 * c + d) (bitsToHex' es)
               bitsToHex' [a, b, c] = showHex (4 * a + 2 * b + c ) ""
               bitsToHex' [a, b] = showHex (2 * a + b ) ""
               bitsToHex' [a] = showHex a ""
               bitsToHex' [] = ""
-	      --bitsToHex' e = error $ show e ++ " is (part of) an invalid argument to bitsToHex"
+              -- bitsToHex' e = error $ show e ++ " is (part of) an invalid argument to bitsToHex"
 
           exponentSign s -- add a + sign for +ve exponents
             | s < 0 = ""
@@ -414,15 +414,15 @@ instance HasNaN Float where
     floating point subnormals -}
     hexToFloat' s
       -- 2**(-127) is the largest denormalised float
-      | abs d <= 2 ** (-127) = realToFrac $ scaleFloat 1 d  -- multiply by 2
-        -- multiply the fractional part by 2 because IBM format is right aligned
+      | abs d <= 2 ** (-127) = realToFrac $ scaleFloat 1 d  {- multiply by 2
+        multiply the fractional part by 2 because IBM format is right aligned -}
       | otherwise = signum (realToFrac d) *
            scaleFloat expnt (val (1 : tail (explicitBits ++ zeroPadding 24)))
       where
-        (_: explicitBits, expnt) = floatToDigits 2 (abs d)
+        (_ : explicitBits, expnt) = floatToDigits 2 (abs d)
 
-	val :: [Int] -> Float
-        val (h:t) = (fromIntegral h + val t) / 2
+        val :: [Int] -> Float
+        val (h : t) = (fromIntegral h + val t) / 2
         val [] = 0
 
         zeroPadding n = replicate n 0
