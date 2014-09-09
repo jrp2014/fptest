@@ -19,6 +19,7 @@ Syntax of the Test Cases>
 
 module FPTypes where
 
+import qualified Control.Exception.Base as H
 import           Data.List (intercalate)
 
 -- |
@@ -210,3 +211,17 @@ instance Display (Exception) where
   display Overflow = "o"
   display DivisionByZero = "z"
   display Invalid = "i"
+
+-- | 'arithExceptionToException' translates from Haskell native exceptions to
+-- the exception type used in test cases.
+-- NB: Not used, as Haskell does not raise these exceptions
+arithExceptionToException :: H.ArithException -> Exception
+arithExceptionToException e =
+  case e of
+    H.Overflow -> Overflow
+    H.Underflow -> ExtraordinaryUnderflow
+    H.LossOfPrecision -> Inexact
+    H.DivideByZero -> DivisionByZero
+    H.Denormal -> ExtraordinaryUnderflow -- Not sure that this is the right mapping
+    H.RatioZeroDenominator -> error "RatioZeroDenominator is not a floating point exception"
+

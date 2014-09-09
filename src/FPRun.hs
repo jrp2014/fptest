@@ -76,13 +76,13 @@ execute TestCase { -- format = f,
       Abs -> return $ abs i1
       CopySign -> unimplemented {- Copysign(x, y) returns x with the sign of y.
                                 Hence, abs(x) = copysign( x, 1.0), even if x is NaN -}
-      Scalb -> unimplemented {- Scalb(y, N) returns y × 2N for integral values N
-                             without computing 2N -}
+      Scalb -> return $ scaleFloat ((truncate i1)) i2 {- Scalb(y, N) returns y × 2**N for integral values N
+                             without computing 2**N -}
       Logb -> return $ log i1
       NextAfter -> unimplemented
       Class -> return $ fpclass i1
       IsSigned -> return $ boolNum $ i1 < 0.0
-      IsNormal -> return $ boolNum $ not $ isDenormalized i1
+      IsNormal -> return $ boolNum $ not (isDenormalized i1 || isNaN i1 || isInfinite i1 || i1 == 0)
       IsFinite -> return $ boolNum $ not $ isInfinite i1
       IsZero -> return $ boolNum $ i1 == 0.0
       IsSubNormal -> return $ boolNum $ isDenormalized i1
@@ -134,7 +134,7 @@ operation = op,
   output = o,
   outputExceptions = oe
   }
-  | te /= [] = Left $ "trapped exceptions unimplemented " ++ display te
+  | te /= [] = Left $ "Trapped exceptions are unimplemented " ++ display te
   | otherwise =
       case f of
         BasicFormat Binary32 -> translate' "F"
@@ -163,8 +163,9 @@ operation = op,
               Abs -> return $ expected ++ "abs " ++ i1
               CopySign -> unimplemented {- Copysign(x, y) returns x with the sign of y.
                                         Hence, abs(x) = copysign( x, 1.0), even if x is NaN -}
-              Scalb -> unimplemented {- Scalb(y, N) returns y × 2N for integral values N
-                                     without computing 2N -}
+              Scalb -> return $ expected ++ "scaleFloat (truncate " ++ i1 ++ ")" ++ i2
+	        {- Scalb(y, N) returns y × 2**N for integral values N
+                                     without computing 2**N -}
               Logb -> return $ expected ++ "log" ++ i1
               NextAfter -> unimplemented
               Class -> unimplemented
@@ -181,8 +182,8 @@ operation = op,
               IsSignalling -> unimplemented
               MinNum -> return $ expected ++ "min" ++ i1 ++ i2
               MaxNum -> return $ expected ++ "max" ++ i1 ++ i2
-              MinNumMag -> unimplemented
-              MaxNumMag -> unimplemented
+              MinNumMag -> return $ expected ++ "max (abs " ++ i1 ++ ") (abs " ++ i2 ++ ")"
+              MaxNumMag -> return $ expected ++ "min (abs " ++ i1 ++ ") (abs " ++ i2 ++ ")"
               SameQuantum -> unimplemented -- only applicable to Decimal operands
               Quantize -> unimplemented -- only applicable to Decimal operands
               NextUp -> unimplemented
@@ -220,7 +221,7 @@ checkResult :: ParsedTestCase -> String
 checkResult t@TestCase { format = f,
   output = o,
   outputExceptions = oe
-  } = display t ++ ":" ++
+  } = display t ++ " Result: " ++
     case f of
       BasicFormat Binary32 ->
         checkResult' ( execute t :: Output Float )
@@ -232,9 +233,9 @@ checkResult t@TestCase { format = f,
         case e of
           Left err -> err -- pass error message on
           Right result -- compare result with expectation
-            | o == "#" -> "No output expected: " ++ show result
-            | floatToHex result == o -> "Success!"
-            | otherwise -> " got " ++ floatToHex result
+            | o == "#" -> "(no output expected) " ++ floatToHex result
+            | floatToHex result == o -> "Pass"
+            | otherwise -> floatToHex result ++ " (Fail)"
 
 
 -- 'translateResult' turns a 'ParsedTestCase' into an HUnit test or a diagnostic String
@@ -286,8 +287,6 @@ because the last bit of the significand is padded to zero, rather than the first
 floatToHex :: (RealFloat a, Show a) => a -> String
 floatToHex x
   | not (isIEEE x) = "Not an IEEE floating point number: " ++ show x
-{- | expnt == eMax + 1 && explicitBits == [] && x > 0 = "+Inf"
-expnt == eMax + 1 && explicitBits == [] && x < 0 = "-Inf" -}
   | isNaN x = "Q" -- Haskell seems to use only quiet NaNs
   | isInfinite x && x > 0 = "+Inf"
   | isInfinite x = "-Inf"
@@ -299,6 +298,11 @@ expnt == eMax + 1 && explicitBits == [] && x < 0 = "-Inf" -}
     where
       floatToHex' y
         | expnt > eMax + 1 = "Exponent (" ++ show expnt ++ ") > " ++ show eMax
+
+        {-
+        | expnt == eMax + 1 && explicitBits == [] && x > 0 = "+Inf"
+        | expnt == eMax + 1 && explicitBits == [] && x < 0 = "-Inf"
+	-}
 
         {- For the subnormal case, since the padding is on the left hand side,
         the exponent needs to be adjusted -}
