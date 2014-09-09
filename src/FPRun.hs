@@ -76,7 +76,7 @@ execute TestCase { -- format = f,
       Abs -> return $ abs i1
       CopySign -> unimplemented {- Copysign(x, y) returns x with the sign of y.
                                 Hence, abs(x) = copysign( x, 1.0), even if x is NaN -}
-      Scalb -> return $ scaleFloat ((truncate i1)) i2 {- Scalb(y, N) returns y × 2**N for integral values N
+      Scalb -> return $ scaleFloat (truncate i1) i2 {- Scalb(y, N) returns y × 2**N for integral values N
                              without computing 2**N -}
       Logb -> return $ log i1
       NextAfter -> unimplemented
