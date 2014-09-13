@@ -82,7 +82,7 @@ the spare bit for Floats should sit.  In the standard representation (ie, set ou
 and  'strtod' libraries, the spare 0 sits to the right (so the 23-bit significand 'f' is *left* justified in the 24-bit
 hexadecimal representation).  The IBM representation *right* justifies the 23 bits of significand in the 24-bit hexadecimal
 representation; the first hexadecimal digit of the significand represents 3 bits.
-The IBM representation also has a fixed format, including trailing zeros.
+The IBM representation also has a fixed length format, including trailing zeros.
 
 Some test vectors also uses lower case versions of certain specification elements.
 
@@ -106,3 +106,11 @@ Haskell has no direct support for
 There is not a great deal of point in testing some of these facilities from Haskell; where they are
 accessible it would just be testing an underlying C library, which it might be better to
 to directly.
+
+
+## Other tests ##
+
+* [FBench](https://www.fourmilab.ch/fbench/) by John Walker, founder of AutoDeck, Inc 
+ is a complete optical design raytracing algorithm, shorn of its user interface.
+ The benchmark, which has been going since 1980 has been ported from C to a variety of languages,
+ including [Haskell](http://www.fourmilab.ch/fourmilog/archives/2012-09/001395.html)
