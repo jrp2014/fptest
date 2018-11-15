@@ -89,7 +89,7 @@ tests). -}
 data Format = BasicFormat BasicFormat |
   ComparisonFormat BasicFormat BasicFormat deriving (Show, Eq)
 
-instance Display (Format) where
+instance Display Format where
   display (BasicFormat bf) = display bf
   display (ComparisonFormat bf1 bf2) = display bf1 ++ display bf2
 
@@ -102,7 +102,7 @@ The binary IBM sample scripts are 'Binary32'only.
 data BasicFormat = Binary32 | Binary64 | Binary128 |
   Decimal32 | Decimal64 | Decimal128 deriving (Show, Eq)
 
-instance Display (BasicFormat) where
+instance Display BasicFormat where
   display Binary32 = "b32"
   display Binary64 = "b64"
   display Binary128 = "b128"
@@ -129,7 +129,7 @@ data Operation = Add | Subtract | Multiply | Divide | FusedMultiplyAdd |
 
 {- | For the moment, 'display' the 'Operation' in Haskell format as it is less
 cryptic than the native test specification format -}
-instance Display (Operation) where
+instance Display Operation where
   display = show
 {- display Add = "+"
 display Subtract = "-"
@@ -178,7 +178,7 @@ mode. -}
 data RoundingMode = PositiveInfinity | NegativeInfinity | Zero | NearestEven |
   NearestAwayFromZero deriving (Show, Eq)
 
-instance Display (RoundingMode) where
+instance Display RoundingMode where
   display PositiveInfinity = ">"
   display NegativeInfinity = "<"
   display Zero = "0"
@@ -190,7 +190,7 @@ the test is executed.  This is unimplemented. -}
 data TrappedException = TrappedInexact | TrappedUnderflow | TrappedOverflow |
   TrappedDivisionByZero | TrappedInvalid deriving (Show, Eq)
 
-instance Display (TrappedException) where
+instance Display TrappedException where
   display TrappedInexact = "x"
   display TrappedUnderflow = "u"
   display TrappedOverflow = "o"
@@ -203,7 +203,7 @@ data Exception = Inexact |
   ExtraordinaryUnderflow | InexactTinyUnderflow | TinyInexactUnderflow |
   Overflow | DivisionByZero | Invalid deriving (Show, Eq)
 
-instance Display (Exception) where
+instance Display Exception where
   display Inexact = "x"
   display ExtraordinaryUnderflow = "u"
   display InexactTinyUnderflow = "v"

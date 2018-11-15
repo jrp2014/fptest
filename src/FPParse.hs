@@ -88,11 +88,9 @@ formatSpec :: GenParser Char st Format
 formatSpec =
   try (do
      f1 <- basicFormatSpec
-     f2 <- basicFormatSpec
-     return (ComparisonFormat f1 f2)) <|>
+     ComparisonFormat f1 <$> basicFormatSpec) <|>
    do
-     f <- basicFormatSpec
-     return (BasicFormat f)
+     BasicFormat <$> basicFormatSpec
 
 basicFormatSpec :: GenParser Char st BasicFormat
 basicFormatSpec = binarySpec <|> decimalSpec
